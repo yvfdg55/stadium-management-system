@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>لوحة الإدارة | إدارة الملعب</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <main class="auth-shell">
+    <section class="auth-card" aria-labelledby="page-title">
+      <div class="brand-mark" aria-hidden="true">م</div>
+      <p class="eyebrow">نظام إدارة الملعب</p>
+      <h1 id="page-title">مرحبًا، {{ username }}</h1>
+      <p class="muted">تم تسجيل الدخول بنجاح. ستتم إضافة وظائف الإدارة في مراحل لاحقة.</p>
+      <form method="post" action="{{ url_for('logout') }}">
+        <button type="submit" class="secondary">تسجيل الخروج</button>
+      </form>
+    </section>
+  </main>
+</body>
+</html>

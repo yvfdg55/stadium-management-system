@@ -1,2 +1,32 @@
-# stadium-management-system
-Stadium management and football pitch booking system
+# نظام إدارة الملعب
+
+نسخة أولية بسيطة لإدارة ملعب، تقتصر حاليًا على الهيكل الأساسي وتسجيل دخول المسؤول.
+
+## النطاق الحالي
+
+- تطبيق Flask بسيط.
+- قاعدة بيانات SQLite تُنشأ تلقائيًا عند التشغيل.
+- جدول `admins` فقط.
+- صفحة تسجيل دخول عربية باتجاه RTL وتصميم Mobile First.
+- صفحة محمية بعد تسجيل الدخول للتأكد من نجاح الجلسة.
+
+لا توجد حاليًا وظائف للعملاء أو الحجوزات أو التقارير.
+
+## التشغيل
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+python app.py
+```
+
+ثم افتح: `http://127.0.0.1:5000/login`
+
+## Admin الافتراضي
+
+- اسم المستخدم: `admin`
+- كلمة المرور: `admin123`
+
+يُنشأ المستخدم تلقائيًا عند أول تشغيل، وتُحفظ كلمة المرور بصيغة hash داخل SQLite.
