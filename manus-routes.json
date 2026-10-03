@@ -1,1 +1,1 @@
-{"routes":[{"path":"/login","title":"تسجيل الدخول"},{"path":"/admin","title":"لوحة الإدارة"},{"path":"/admin/clients","title":"العملاء"},{"path":"/admin/clients/new","title":"إضافة عميل"},{"path":"/admin/clients/:client_id/edit","title":"تعديل عميل"}]}
+{"routes":[{"path":"/login","title":"تسجيل الدخول"},{"path":"/admin","title":"لوحة الإدارة"},{"path":"/admin/booking","title":"مواعيد الملعب"},{"path":"/admin/clients","title":"العملاء"},{"path":"/admin/clients/new","title":"إضافة عميل"},{"path":"/admin/clients/:client_id/edit","title":"تعديل عميل"}]}

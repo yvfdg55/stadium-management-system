@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>مواعيد الملعب | إدارة الملعب</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <main class="page-shell">
+    <header class="page-header">
+      <div>
+        <p class="eyebrow">نظام إدارة الملعب</p>
+        <h1>مواعيد الملعب</h1>
+        <p class="muted compact">عرض المواعيد فقط — لا يتم إنشاء حجز في هذه المرحلة.</p>
+      </div>
+      <a class="button-link secondary" href="{{ url_for('admin_home') }}">الرئيسية</a>
+    </header>
+
+    <section class="schedule-meta" aria-label="إعدادات المواعيد الحالية">
+      <span>سعر الساعة القابل للإعداد: <strong>{{ '{:,}'.format(hourly_rate) }}</strong></span>
+    </section>
+
+    <section aria-labelledby="days-title">
+      <div class="section-heading">
+        <h2 id="days-title">الأيام السبعة القادمة</h2>
+      </div>
+      <nav class="days-strip" aria-label="اختيار اليوم">
+        {% for day in days %}
+          <a class="day-card {{ 'selected' if day['date'] == selected_date else '' }}" href="{{ url_for('booking_screen', date=day['date']) }}">
+            <span class="day-name">{{ day['day_name'] }}</span>
+            <span class="day-date">{{ day['date_label'] }}</span>
+            {% if day['is_today'] %}<span class="today-label">اليوم</span>{% endif %}
+          </a>
+        {% endfor %}
+      </nav>
+    </section>
+
+    <section class="slots-section" aria-labelledby="slots-title">
+      <div class="section-heading">
+        <h2 id="slots-title">ساعات العمل</h2>
+        <span class="selected-date">{{ selected_date }}</span>
+      </div>
+      <div class="slots-list">
+        {% for slot in slots %}
+          <div class="slot-card" aria-label="{{ slot['start'] }} - {{ slot['end'] }}">
+            <span>{{ slot['start'] }} - {{ slot['end'] }}</span>
+            <span class="slot-status">متاح للعرض</span>
+          </div>
+        {% else %}
+          <div class="empty-state"><p>لا توجد ساعات عمل مضبوطة.</p></div>
+        {% endfor %}
+      </div>
+    </section>
+  </main>
+</body>
+</html>

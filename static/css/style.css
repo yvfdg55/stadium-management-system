@@ -60,6 +60,7 @@ body {
 h1 { margin: 0; font-size: 1.65rem; }
 h2 { margin: 0; font-size: 1.05rem; }
 .muted { margin: .6rem 0 1.5rem; color: var(--muted); line-height: 1.7; }
+.muted.compact { margin-bottom: 0; }
 
 .login-form, .form-card { display: grid; gap: .55rem; }
 label { margin-top: .55rem; font-size: .9rem; font-weight: 700; }
@@ -121,6 +122,53 @@ button.secondary:hover, .button-link.secondary:hover { background: #dbe5f4; }
   margin-bottom: 1.25rem;
 }
 .page-header .button-link { flex: 0 0 auto; margin-top: 0; }
+.schedule-meta {
+  margin-bottom: 1.25rem;
+  padding: .8rem 1rem;
+  border: 1px solid #bfdbfe;
+  border-radius: .7rem;
+  color: #1e40af;
+  background: #eff6ff;
+  font-size: .9rem;
+}
+.section-heading { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin: 1.25rem 0 .75rem; }
+.selected-date { color: var(--muted); font-size: .88rem; }
+.days-strip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .6rem;
+}
+.day-card {
+  display: flex;
+  flex-direction: column;
+  gap: .3rem;
+  min-height: 5.4rem;
+  padding: .75rem;
+  border: 1px solid var(--line);
+  border-radius: .7rem;
+  color: var(--navy);
+  background: var(--surface);
+  text-decoration: none;
+}
+.day-card:hover, .day-card.selected { border-color: var(--blue); background: #eff6ff; }
+.day-card.selected { box-shadow: inset 0 0 0 1px var(--blue); }
+.day-name { color: var(--blue); font-size: .9rem; font-weight: 700; }
+.day-date { font-size: .9rem; }
+.today-label { color: var(--muted); font-size: .76rem; }
+.slots-list { display: grid; gap: .6rem; }
+.slot-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  min-height: 3.4rem;
+  padding: .8rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: .65rem;
+  background: var(--surface);
+  font-weight: 700;
+}
+.slot-status { color: #15803d; font-size: .8rem; font-weight: 400; }
 .toolbar { display: grid; gap: .75rem; margin-bottom: 1rem; }
 .search-form { display: flex; gap: .5rem; }
 .search-form input { flex: 1; }
@@ -168,4 +216,5 @@ button.danger:hover { background: #ffe4e6; }
   .page-shell { padding: 2rem 1.5rem; }
   .toolbar { grid-template-columns: 1fr auto; align-items: end; }
   .client-card { flex-direction: row; align-items: center; justify-content: space-between; }
+  .days-strip { grid-template-columns: repeat(7, minmax(0, 1fr)); }
 }

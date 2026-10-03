@@ -2,6 +2,7 @@ import os
 import sqlite3
 from functools import wraps
 from pathlib import Path
+from datetime import datetime, timedelta
 
 from flask import Flask, flash, g, redirect, render_template, request, session, url_for
 from dotenv import load_dotenv
@@ -11,6 +12,9 @@ BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / ".env")
 DATABASE_PATH = Path(os.getenv("DATABASE_PATH", BASE_DIR / "instance" / "stadium.db"))
 SECRET_KEY = os.getenv("SECRET_KEY", "change-this-secret-key")
+WORK_START_HOUR = int(os.getenv("BOOKING_START_HOUR", "8"))
+WORK_END_HOUR = int(os.getenv("BOOKING_END_HOUR", "23"))
+HOURLY_RATE = int(os.getenv("HOURLY_RATE", "10000"))
 
 app = Flask(__name__)
 app.config.update(SECRET_KEY=SECRET_KEY, DATABASE=str(DATABASE_PATH))
@@ -100,6 +104,39 @@ def login():
 @login_required
 def admin_home():
     return render_template("admin_home.html", username=session.get("admin_username"))
+
+
+@app.route("/admin/booking", methods=["GET"])
+@login_required
+def booking_screen():
+    today = datetime.now().date()
+    days = []
+    arabic_days = ["الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد"]
+    for offset in range(7):
+        current = today + timedelta(days=offset)
+        days.append({
+            "date": current.isoformat(),
+            "day_name": arabic_days[current.weekday()],
+            "date_label": current.strftime("%d/%m/%Y"),
+            "is_today": offset == 0,
+        })
+
+    selected_date = request.args.get("date", today.isoformat())
+    valid_dates = {day["date"] for day in days}
+    if selected_date not in valid_dates:
+        selected_date = today.isoformat()
+
+    slots = [
+        {"start": f"{hour:02d}:00", "end": f"{hour + 1:02d}:00"}
+        for hour in range(WORK_START_HOUR, WORK_END_HOUR)
+    ]
+    return render_template(
+        "booking_screen.html",
+        days=days,
+        selected_date=selected_date,
+        slots=slots,
+        hourly_rate=HOURLY_RATE,
+    )
 
 
 @app.route("/admin/clients", methods=["GET"])
