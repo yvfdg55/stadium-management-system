@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>العملاء | إدارة الملعب</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <main class="page-shell">
+    <header class="page-header">
+      <div>
+        <p class="eyebrow">نظام إدارة الملعب</p>
+        <h1>العملاء</h1>
+      </div>
+      <a class="button-link secondary" href="{{ url_for('admin_home') }}">الرئيسية</a>
+    </header>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="alert {{ category }}" role="alert">{{ message }}</div>
+      {% endfor %}
+    {% endwith %}
+
+    <section class="toolbar" aria-label="أدوات العملاء">
+      <form method="get" class="search-form">
+        <label class="sr-only" for="q">البحث بالاسم أو الهاتف</label>
+        <input id="q" name="q" type="search" value="{{ query }}" placeholder="ابحث بالاسم أو الهاتف">
+        <button type="submit">بحث</button>
+      </form>
+      <a class="button-link" href="{{ url_for('client_new') }}">إضافة عميل</a>
+    </section>
+
+    {% if clients %}
+      <section class="client-list" aria-label="قائمة العملاء">
+        {% for client in clients %}
+          <article class="client-card">
+            <div class="client-main">
+              <h2>{{ client['name'] }}</h2>
+              <p class="phone">{{ client['phone'] }}</p>
+              {% if client['notes'] %}<p class="notes">{{ client['notes'] }}</p>{% endif %}
+            </div>
+            <div class="card-actions">
+              <a class="button-link small secondary" href="{{ url_for('client_edit', client_id=client['id']) }}">تعديل</a>
+              <form method="post" action="{{ url_for('client_delete', client_id=client['id']) }}" onsubmit="return confirm('هل تريد حذف هذا العميل؟');">
+                <button class="small danger" type="submit">حذف</button>
+              </form>
+            </div>
+          </article>
+        {% endfor %}
+      </section>
+    {% else %}
+      <section class="empty-state">
+        <h2>لا يوجد عملاء</h2>
+        <p>أضف أول عميل أو غيّر كلمة البحث.</p>
+      </section>
+    {% endif %}
+  </main>
+</body>
+</html>

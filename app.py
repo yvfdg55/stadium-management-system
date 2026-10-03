@@ -36,6 +36,17 @@ def init_db():
         )
         """
     )
+    db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS clients (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            phone TEXT NOT NULL,
+            notes TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
     admin = db.execute("SELECT id FROM admins WHERE username = ?", ("admin",)).fetchone()
     if admin is None:
         db.execute(
@@ -89,6 +100,81 @@ def login():
 @login_required
 def admin_home():
     return render_template("admin_home.html", username=session.get("admin_username"))
+
+
+@app.route("/admin/clients", methods=["GET"])
+@login_required
+def clients_list():
+    query = request.args.get("q", "").strip()
+    db = get_db()
+    if query:
+        clients = db.execute(
+            """
+            SELECT id, name, phone, notes
+            FROM clients
+            WHERE name LIKE ? OR phone LIKE ?
+            ORDER BY name COLLATE NOCASE, id DESC
+            """,
+            (f"%{query}%", f"%{query}%"),
+        ).fetchall()
+    else:
+        clients = db.execute(
+            "SELECT id, name, phone, notes FROM clients ORDER BY name COLLATE NOCASE, id DESC"
+        ).fetchall()
+    return render_template("clients_list.html", clients=clients, query=query)
+
+
+@app.route("/admin/clients/new", methods=["GET", "POST"])
+@login_required
+def client_new():
+    if request.method == "POST":
+        name = request.form.get("name", "").strip()
+        phone = request.form.get("phone", "").strip()
+        notes = request.form.get("notes", "").strip()
+        if not name or not phone:
+            flash("الاسم ورقم الهاتف مطلوبان.", "error")
+            return render_template("client_form.html", client=None)
+        db = get_db()
+        db.execute("INSERT INTO clients (name, phone, notes) VALUES (?, ?, ?)", (name, phone, notes))
+        db.commit()
+        flash("تمت إضافة العميل بنجاح.", "success")
+        return redirect(url_for("clients_list"))
+    return render_template("client_form.html", client=None)
+
+
+@app.route("/admin/clients/<int:client_id>/edit", methods=["GET", "POST"])
+@login_required
+def client_edit(client_id):
+    db = get_db()
+    client = db.execute("SELECT id, name, phone, notes FROM clients WHERE id = ?", (client_id,)).fetchone()
+    if client is None:
+        flash("العميل غير موجود.", "error")
+        return redirect(url_for("clients_list"))
+    if request.method == "POST":
+        name = request.form.get("name", "").strip()
+        phone = request.form.get("phone", "").strip()
+        notes = request.form.get("notes", "").strip()
+        if not name or not phone:
+            flash("الاسم ورقم الهاتف مطلوبان.", "error")
+            return render_template("client_form.html", client={"id": client_id, "name": name, "phone": phone, "notes": notes})
+        db.execute(
+            "UPDATE clients SET name = ?, phone = ?, notes = ? WHERE id = ?",
+            (name, phone, notes, client_id),
+        )
+        db.commit()
+        flash("تم تعديل بيانات العميل.", "success")
+        return redirect(url_for("clients_list"))
+    return render_template("client_form.html", client=client)
+
+
+@app.route("/admin/clients/<int:client_id>/delete", methods=["POST"])
+@login_required
+def client_delete(client_id):
+    db = get_db()
+    db.execute("DELETE FROM clients WHERE id = ?", (client_id,))
+    db.commit()
+    flash("تم حذف العميل.", "success")
+    return redirect(url_for("clients_list"))
 
 
 @app.route("/logout", methods=["POST"])
