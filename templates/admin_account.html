@@ -7,6 +7,7 @@
   <script src="{{ url_for('static', filename='js/theme.js') }}" defer></script>
 </head>
 <body>
+  {% include "_admin_nav.html" %}
   <main class="page-shell narrow">
     <header class="page-header"><div><p class="eyebrow">نظام إدارة الملعب</p><h1>حساب الأدمن</h1><p class="muted compact">يمكنك تغيير اسم المستخدم وكلمة المرور من هنا.</p></div><a class="button-link secondary" href="{{ url_for('admin_home') }}">الرئيسية</a></header>
     {% with messages = get_flashed_messages(with_categories=true) %}{% for category, message in messages %}<div class="alert {{ category }}" role="status">{{ message }}</div>{% endfor %}{% endwith %}

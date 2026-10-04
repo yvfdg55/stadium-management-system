@@ -9,6 +9,7 @@
   <script src="{{ url_for('static', filename='js/theme.js') }}" defer></script>
 </head>
 <body>
+  {% include "_admin_nav.html" %}
   {% macro report_metrics(summary) %}
     <div class="report-metrics">
       <div class="report-metric"><span>عدد الحجوزات</span><strong>{{ '{:,}'.format(summary['booking_count']) }}</strong></div>

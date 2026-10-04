@@ -7,6 +7,7 @@
   <script src="{{ url_for('static', filename='js/theme.js') }}" defer></script>
 </head>
 <body>
+  {% include "_admin_nav.html" %}
   <main class="page-shell narrow">
     <header class="page-header"><div><p class="eyebrow">الإدارة المالية</p><h1>{{ page_title }}</h1></div><a class="button-link secondary" href="{{ url_for('expenses_list' if kind == 'expense' else 'income_list') }}">العودة للقائمة</a></header>
     {% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
