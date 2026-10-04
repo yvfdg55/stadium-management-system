@@ -73,6 +73,33 @@ body {
 [data-theme="dark"] .dashboard-finance > div { background: var(--surface-muted); }
 .theme-toggle { position: fixed; z-index: 20; inset-inline-start: 1rem; bottom: 1rem; width: auto; min-height: 2.5rem; margin: 0; padding: .55rem .8rem; border: 1px solid var(--line); border-radius: 999px; color: var(--navy); background: var(--surface); box-shadow: var(--shadow-soft); font-size: .78rem; }
 .theme-toggle:hover { background: var(--surface-muted); }
+.dashboard-layout { display: flex; min-height: 100vh; }
+.dashboard-sidebar { position: fixed; z-index: 30; inset: 0 0 0 auto; width: min(82vw, 17rem); display: flex; flex-direction: column; padding: 1.25rem; border-inline-start: 1px solid var(--line); background: var(--surface); transform: translateX(105%); transition: transform .2s ease; }
+.dashboard-sidebar.is-open { transform: translateX(0); }
+.sidebar-brand { display: flex; align-items: center; gap: .65rem; padding-bottom: 1.25rem; border-bottom: 1px solid var(--line); }
+.sidebar-brand .brand-mark { flex: 0 0 auto; width: 2.5rem; height: 2.5rem; margin: 0; }
+.sidebar-brand strong, .sidebar-brand small { display: block; }
+.sidebar-brand small { margin-top: .15rem; color: var(--muted); font-size: .72rem; }
+.sidebar-nav { display: grid; gap: .25rem; margin-top: 1.25rem; }
+.sidebar-label { margin: .85rem .65rem .15rem; color: var(--muted); font-size: .7rem; font-weight: 700; }
+.sidebar-link { display: flex; align-items: center; gap: .65rem; padding: .65rem .75rem; border-radius: var(--radius-sm); color: var(--navy); font-size: .88rem; text-decoration: none; }
+.sidebar-link span { width: 1.2rem; color: var(--blue); text-align: center; font-weight: 700; }
+.sidebar-link:hover, .sidebar-link.active { color: var(--blue-dark); background: var(--primary-soft); }
+.sidebar-logout { margin-top: auto; }
+.sidebar-logout button { margin-top: 1rem; }
+.dashboard-main { width: 100%; padding: 1.25rem; }
+.dashboard-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; max-width: 80rem; margin: 0 auto 1.5rem; }
+.dashboard-header h1 { color: var(--primary); }
+.dashboard-date { margin: .35rem 0 0; color: var(--muted); font-size: .82rem; }
+.dashboard-header-actions { display: flex; gap: .5rem; align-items: center; }
+.dashboard-header-actions .button-link { margin-top: 0; }
+.mobile-menu-toggle { width: auto; margin: 0; }
+.quick-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; max-width: 80rem; margin: 1.25rem auto 0; }
+.quick-action { display: grid; gap: .25rem; padding: .85rem; border: 1px solid var(--line); border-radius: var(--radius-md); color: var(--navy); background: var(--surface); text-decoration: none; box-shadow: var(--shadow-soft); }
+.quick-action:hover { border-color: var(--blue); box-shadow: var(--shadow-hover); }
+.quick-action span { color: var(--muted); font-size: .75rem; }
+.quick-action.primary { color: #fff; border-color: var(--blue); background: var(--blue); }
+.quick-action.primary span { color: #dbeafe; }
 
 .brand-mark {
   width: 3rem;
@@ -474,6 +501,13 @@ button.danger:hover { background: #ffe4e6; }
   .booking-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .report-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; }
   .report-metrics { grid-template-columns: 1fr; }
+}
+
+@media (min-width: 960px) {
+  .dashboard-sidebar { position: fixed; transform: none; }
+  .dashboard-main { width: calc(100% - 17rem); margin-inline-start: 17rem; padding: 2rem; }
+  .mobile-menu-toggle { display: none; }
+  .quick-actions { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 
 @media (max-width: 360px) {

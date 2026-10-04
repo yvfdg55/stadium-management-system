@@ -3,38 +3,57 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>لوحة الإدارة | إدارة الملعب</title>
+  <title>لوحة الإدارة | {{ venue_name }}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   <link rel="stylesheet" href="{{ url_for('theme_css') }}">
   <script src="{{ url_for('static', filename='js/theme.js') }}" defer></script>
 </head>
 <body>
-  <main class="auth-shell">
-    <section class="auth-card" aria-labelledby="page-title">
-      <div class="brand-mark" aria-hidden="true">م</div>
-      <p class="eyebrow">نظام إدارة الملعب</p>
-      <h1 id="page-title">مرحبًا، {{ username }}</h1>
-      <p class="muted">تم تسجيل الدخول بنجاح.</p>
-      <section class="dashboard-finance" aria-label="ملخص اليوم المالي">
+  <div class="dashboard-layout">
+    <aside class="dashboard-sidebar" aria-label="التنقل الرئيسي">
+      <div class="sidebar-brand"><span class="brand-mark" aria-hidden="true">م</span><div><strong>{{ venue_name }}</strong><small>نظام الإدارة</small></div></div>
+      <nav class="sidebar-nav">
+        <a class="sidebar-link active" href="{{ url_for('admin_home') }}"><span>⌂</span>الرئيسية</a>
+        <p class="sidebar-label">الحجوزات</p>
+        <a class="sidebar-link" href="{{ url_for('booking_screen') }}"><span>▦</span>الحجوزات</a>
+        <a class="sidebar-link" href="{{ url_for('recurring_booking_new') }}"><span>↻</span>الحجوزات الأسبوعية</a>
+        <p class="sidebar-label">العملاء والمالية</p>
+        <a class="sidebar-link" href="{{ url_for('clients_list') }}"><span>♙</span>العملاء</a>
+        <a class="sidebar-link" href="{{ url_for('expenses_list') }}"><span>−</span>المصروفات</a>
+        <a class="sidebar-link" href="{{ url_for('income_list') }}"><span>+</span>واردات أخرى</a>
+        <a class="sidebar-link" href="{{ url_for('admin_reports') }}"><span>▥</span>التقارير</a>
+        <p class="sidebar-label">النظام</p>
+        <a class="sidebar-link" href="{{ url_for('settings_page') }}"><span>⚙</span>الإعدادات</a>
+        <a class="sidebar-link" href="{{ url_for('public_schedule') }}" target="_blank" rel="noopener"><span>◉</span>واجهة العملاء</a>
+      </nav>
+      <form class="sidebar-logout" method="post" action="{{ url_for('logout') }}"><button class="secondary" type="submit">تسجيل الخروج</button></form>
+    </aside>
+
+    <main class="dashboard-main">
+      <header class="dashboard-header">
+        <div><p class="eyebrow">لوحة التحكم</p><h1>مرحبًا، {{ username }}</h1><p class="dashboard-date">{{ dashboard_date }}</p></div>
+        <div class="dashboard-header-actions"><a class="button-link secondary" href="{{ url_for('admin_account') }}">حسابي</a><button class="mobile-menu-toggle secondary" type="button" aria-label="فتح القائمة">القائمة</button></div>
+      </header>
+
+      <section class="dashboard-finance dashboard-legacy-finance" aria-label="ملخص اليوم المالي">
         <div><span>دخل الحجوزات</span><strong>{{ '{:,}'.format(dashboard_finance['booking_income']) }}</strong></div>
         <div><span>الواردات الأخرى</span><strong>{{ '{:,}'.format(dashboard_finance['other_income']) }}</strong></div>
         <div><span>إجمالي الإيرادات</span><strong>{{ '{:,}'.format(dashboard_finance['total_income']) }}</strong></div>
         <div><span>المصروفات</span><strong>{{ '{:,}'.format(dashboard_finance['expenses']) }}</strong></div>
         <div><span>صافي الدخل</span><strong>{{ '{:,}'.format(dashboard_finance['net_income']) }}</strong></div>
       </section>
-      <a class="button-link" href="{{ url_for('booking_screen') }}">الحجوزات</a>
-      <a class="button-link recurring-button" href="{{ url_for('recurring_booking_new') }}">الحجز المتكرر</a>
-      <a class="button-link" href="{{ url_for('expenses_list') }}">المصروفات</a>
-      <a class="button-link" href="{{ url_for('income_list') }}">واردات أخرى</a>
-      <a class="button-link" href="{{ url_for('clients_list') }}">إدارة العملاء</a>
-      <a class="button-link" href="{{ url_for('admin_reports') }}">التقارير</a>
-      <a class="button-link" href="{{ url_for('settings_page') }}">الإعدادات</a>
-      <a class="button-link secondary" href="{{ url_for('admin_account') }}">حساب الأدمن</a>
-      <form method="post" action="{{ url_for('logout') }}">
-        <button type="submit" class="secondary">تسجيل الخروج</button>
-      </form>
-    </section>
-  </main>
+
+      <section class="quick-actions" aria-label="إجراءات سريعة">
+        <a class="quick-action primary" href="{{ url_for('booking_new') }}"><strong>+ حجز جديد</strong><span>إضافة موعد للملعب</span></a>
+        <a class="quick-action" href="{{ url_for('client_new') }}"><strong>+ عميل جديد</strong><span>إضافة بيانات عميل</span></a>
+        <a class="quick-action" href="{{ url_for('expense_new') }}"><strong>+ إضافة مصروف</strong><span>تسجيل مصروف</span></a>
+        <a class="quick-action" href="{{ url_for('income_new') }}"><strong>+ وارد آخر</strong><span>تسجيل وارد</span></a>
+      </section>
+    </main>
+  </div>
   <button class="theme-toggle" data-theme-toggle type="button" aria-label="تبديل الوضع" aria-pressed="false"></button>
+  <script>
+    (() => { const button = document.querySelector('.mobile-menu-toggle'); const sidebar = document.querySelector('.dashboard-sidebar'); if (button && sidebar) button.addEventListener('click', () => sidebar.classList.toggle('is-open')); })();
+  </script>
 </body>
 </html>

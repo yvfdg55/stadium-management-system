@@ -727,6 +727,8 @@ def admin_home():
     today = stadium_business_date(settings=settings).isoformat()
     return render_template(
         "admin_home.html", username=session.get("admin_username"),
+        venue_name=settings["venue_name"],
+        dashboard_date=today,
         dashboard_finance=get_finance_summary(today, today),
     )
 
