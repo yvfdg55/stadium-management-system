@@ -100,6 +100,31 @@ body {
 .quick-action span { color: var(--muted); font-size: .75rem; }
 .quick-action.primary { color: #fff; border-color: var(--blue); background: var(--blue); }
 .quick-action.primary span { color: #dbeafe; }
+.dashboard-stat-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; max-width: 80rem; margin: 0 auto 1rem; }
+.dashboard-stat { display: grid; gap: .2rem; min-width: 0; padding: .85rem; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); box-shadow: var(--shadow-soft); }
+.dashboard-stat span, .dashboard-stat small { color: var(--muted); font-size: .72rem; }
+.dashboard-stat strong { color: var(--primary); font-size: 1.35rem; overflow-wrap: anywhere; }
+.dashboard-stat.warning-stat strong { color: var(--warning); }
+.dashboard-stat.net-stat { border-color: #86efac; }
+.dashboard-stat.net-stat strong { color: var(--success); }
+.dashboard-content-grid { display: grid; gap: .85rem; max-width: 80rem; margin: 0 auto 1rem; }
+.dashboard-panel { padding: 1rem; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); box-shadow: var(--shadow-soft); }
+.dashboard-time { color: var(--muted); font-size: .85rem; direction: ltr; }
+.current-venue-card p { margin: .8rem 0 0; color: var(--muted); font-size: .82rem; }
+.venue-state { display: flex; align-items: center; gap: .5rem; margin-top: 1.25rem; font-size: 1.15rem; }
+.venue-state i { width: .8rem; height: .8rem; border-radius: 50%; background: currentColor; }
+.state-empty { color: var(--success); }
+.state-booked { color: var(--danger); }
+.state-fixed { color: var(--info); }
+.upcoming-panel .premium-section-title a { color: var(--blue); font-size: .8rem; text-decoration: none; }
+.upcoming-list { display: grid; gap: .5rem; margin-top: .9rem; }
+.upcoming-item { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .65rem 0; border-bottom: 1px solid var(--line); }
+.upcoming-item:last-child { border-bottom: 0; }
+.upcoming-item div { display: grid; gap: .15rem; min-width: 0; }
+.upcoming-item span { overflow: hidden; color: var(--muted); font-size: .78rem; text-overflow: ellipsis; white-space: nowrap; }
+.payment-mini { flex: 0 0 auto; padding: .3rem .5rem; border-radius: 999px; font-size: .7rem; }
+.payment-mini.paid { color: var(--success); background: #dcfce7; }
+.payment-mini.due { color: var(--warning); background: #ffedd5; }
 
 .brand-mark {
   width: 3rem;
@@ -508,6 +533,8 @@ button.danger:hover { background: #ffe4e6; }
   .dashboard-main { width: calc(100% - 17rem); margin-inline-start: 17rem; padding: 2rem; }
   .mobile-menu-toggle { display: none; }
   .quick-actions { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .dashboard-stat-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .dashboard-content-grid { grid-template-columns: minmax(15rem, .8fr) minmax(0, 1.2fr); }
 }
 
 @media (max-width: 360px) {

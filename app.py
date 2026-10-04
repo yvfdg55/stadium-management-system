@@ -724,12 +724,60 @@ def login():
 @login_required
 def admin_home():
     settings = get_app_settings()
-    today = stadium_business_date(settings=settings).isoformat()
+    today_date = stadium_business_date(settings=settings)
+    today = today_date.isoformat()
+    booking_summary = get_booking_report_summary(today, today)
+    finance_summary = get_finance_summary(today, today)
+    cycle_start_minutes, window_minutes = work_window(settings)
+    current_minutes = datetime.now().hour * 60 + datetime.now().minute
+    current_offset = (current_minutes - cycle_start_minutes) % (24 * 60)
+    current_booking = None
+    current_rows = get_db().execute(
+        "SELECT start_time, duration_hours, booking_type FROM bookings "
+        "WHERE booking_date = ? AND status = 'active'", (today,)
+    ).fetchall()
+    for row in current_rows:
+        start_offset = cycle_offset(row["start_time"], cycle_start_minutes)
+        if start_offset <= current_offset < start_offset + row["duration_hours"] * 60:
+            current_booking = row
+            break
+    upcoming_rows = get_db().execute(
+        """
+        SELECT b.booking_date, b.start_time, b.duration_hours, b.booking_type,
+               c.name AS client_name, b.total, COALESCE(SUM(p.amount), 0) AS paid
+        FROM bookings AS b
+        JOIN clients AS c ON c.id = b.client_id
+        LEFT JOIN booking_payments AS p ON p.booking_id = b.id
+        WHERE b.status = 'active' AND b.booking_date >= ?
+        GROUP BY b.id ORDER BY b.booking_date ASC LIMIT 30
+        """, (today,)
+    ).fetchall()
+    upcoming = []
+    for row in upcoming_rows:
+        item = dict(row)
+        item["remaining"] = item["total"] - item["paid"]
+        item["offset"] = cycle_offset(item["start_time"], cycle_start_minutes)
+        upcoming.append(item)
+    upcoming.sort(key=lambda item: (item["booking_date"], item["offset"]))
+    dashboard_stats = {
+        "booking_income": booking_summary["total_paid"],
+        "booking_count": booking_summary["booking_count"],
+        "occupied_hours": booking_summary["booked_hours"],
+        "available_hours": max(0, window_minutes // 60 - booking_summary["booked_hours"]),
+        "paid": booking_summary["total_paid"],
+        "remaining": booking_summary["total_remaining"],
+        "expenses": finance_summary["expenses"],
+        "net_income": finance_summary["net_income"],
+    }
     return render_template(
         "admin_home.html", username=session.get("admin_username"),
         venue_name=settings["venue_name"],
         dashboard_date=today,
+        current_time=datetime.now().strftime("%H:%M"),
         dashboard_finance=get_finance_summary(today, today),
+        dashboard_stats=dashboard_stats,
+        current_booking=current_booking,
+        upcoming_bookings=upcoming[:5],
     )
 
 

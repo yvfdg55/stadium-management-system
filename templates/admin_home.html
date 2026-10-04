@@ -35,6 +35,38 @@
         <div class="dashboard-header-actions"><a class="button-link secondary" href="{{ url_for('admin_account') }}">حسابي</a><button class="mobile-menu-toggle secondary" type="button" aria-label="فتح القائمة">القائمة</button></div>
       </header>
 
+      <section class="dashboard-stat-grid" aria-label="إحصائيات اليوم">
+        <article class="dashboard-stat"><span>دخل اليوم</span><strong>{{ '{:,}'.format(dashboard_stats['booking_income']) }}</strong><small>الحجوزات المدفوعة</small></article>
+        <article class="dashboard-stat"><span>حجوزات اليوم</span><strong>{{ '{:,}'.format(dashboard_stats['booking_count']) }}</strong><small>حجز نشط</small></article>
+        <article class="dashboard-stat"><span>الساعات المشغولة</span><strong>{{ '{:,}'.format(dashboard_stats['occupied_hours']) }}</strong><small>ساعة</small></article>
+        <article class="dashboard-stat"><span>الساعات المتاحة</span><strong>{{ '{:,}'.format(dashboard_stats['available_hours']) }}</strong><small>ساعة</small></article>
+        <article class="dashboard-stat"><span>المدفوع</span><strong>{{ '{:,}'.format(dashboard_stats['paid']) }}</strong><small>من قيمة الحجوزات</small></article>
+        <article class="dashboard-stat warning-stat"><span>المتبقي</span><strong>{{ '{:,}'.format(dashboard_stats['remaining']) }}</strong><small>مبالغ مستحقة</small></article>
+        <article class="dashboard-stat"><span>المصروفات</span><strong>{{ '{:,}'.format(dashboard_stats['expenses']) }}</strong><small>مصروفات اليوم</small></article>
+        <article class="dashboard-stat net-stat"><span>صافي اليوم</span><strong>{{ '{:,}'.format(dashboard_stats['net_income']) }}</strong><small>الإيرادات ناقص المصروفات</small></article>
+      </section>
+
+      <section class="dashboard-content-grid">
+        <article class="dashboard-panel current-venue-card">
+          <div class="premium-section-title"><h2>حالة الملعب الآن</h2><span class="dashboard-time">{{ current_time }}</span></div>
+          {% if current_booking %}
+            <div class="venue-state state-{{ 'fixed' if current_booking['booking_type'] == 'recurring' else 'booked' }}"><i></i><strong>{{ 'مثبت' if current_booking['booking_type'] == 'recurring' else 'محجوز' }}</strong></div>
+            <p>الساعة الحالية ضمن فترة حجز.</p>
+          {% else %}
+            <div class="venue-state state-empty"><i></i><strong>متاحة</strong></div>
+            <p>لا يوجد حجز نشط في الساعة الحالية.</p>
+          {% endif %}
+        </article>
+        <article class="dashboard-panel upcoming-panel">
+          <div class="premium-section-title"><h2>الحجوزات القادمة</h2><a href="{{ url_for('booking_screen') }}">عرض الكل</a></div>
+          <div class="upcoming-list">
+            {% for booking in upcoming_bookings %}
+              <div class="upcoming-item"><div><strong>{{ booking['start_time'] }} · {{ booking['duration_hours'] }} س</strong><span>{{ booking['client_name'] }}</span></div><b class="payment-mini {{ 'paid' if booking['remaining'] == 0 else 'due' }}">{{ 'مدفوع' if booking['remaining'] == 0 else 'متبقي' }}</b></div>
+            {% else %}<p class="muted compact">لا توجد حجوزات قادمة.</p>{% endfor %}
+          </div>
+        </article>
+      </section>
+
       <section class="dashboard-finance dashboard-legacy-finance" aria-label="ملخص اليوم المالي">
         <div><span>دخل الحجوزات</span><strong>{{ '{:,}'.format(dashboard_finance['booking_income']) }}</strong></div>
         <div><span>الواردات الأخرى</span><strong>{{ '{:,}'.format(dashboard_finance['other_income']) }}</strong></div>
