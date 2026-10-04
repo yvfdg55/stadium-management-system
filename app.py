@@ -85,6 +85,16 @@ def cycle_offset(value, cycle_start_minutes):
     return (clock_minutes(value) - cycle_start_minutes) % (24 * 60)
 
 
+def stadium_business_date(moment=None, settings=None):
+    """Return the date on which the current stadium-day cycle began."""
+    moment = moment or datetime.now()
+    settings = settings or get_app_settings()
+    business_date = moment.date()
+    if moment.hour * 60 + moment.minute < clock_minutes(settings["work_start"]):
+        business_date -= timedelta(days=1)
+    return business_date
+
+
 def init_db():
     db = get_db()
     db.execute(
@@ -581,9 +591,16 @@ def theme_css():
 @app.route("/admin/reports", methods=["GET"])
 @login_required
 def admin_reports():
-    today = date.today()
-    month_start = today.replace(day=1)
-    year_start = date(today.year, 1, 1)
+    settings = get_app_settings()
+    stadium_today = stadium_business_date(datetime.now(), settings)
+    month_start = stadium_today.replace(day=1)
+    year_start = date(stadium_today.year, 1, 1)
+    cycle_start_minutes, cycle_minutes = work_window(settings)
+    cycle_end = format_clock(cycle_start_minutes + cycle_minutes)
+    next_day_suffix = " في اليوم التالي" if cycle_start_minutes + cycle_minutes >= 24 * 60 else ""
+    cycle_description = (
+        f"من {settings['work_start']} إلى {cycle_end}{next_day_suffix}"
+    )
     custom_start = request.args.get("start_date", "").strip()
     custom_end = request.args.get("end_date", "").strip()
     custom_summary = None
@@ -609,16 +626,23 @@ def admin_reports():
 
     return render_template(
         "reports.html",
-        today_label=today.strftime("%d/%m/%Y"),
-        month_label=f"من بداية الشهر ({month_start.strftime('%d/%m/%Y')}) حتى اليوم",
-        year_label=f"من بداية السنة ({year_start.strftime('%d/%m/%Y')}) حتى اليوم",
-        today_summary=get_booking_report_summary(today.isoformat(), today.isoformat()),
-        month_summary=get_booking_report_summary(month_start.isoformat(), today.isoformat()),
-        year_summary=get_booking_report_summary(year_start.isoformat(), today.isoformat()),
+        today_label=f"{stadium_today.strftime('%d/%m/%Y')} · {cycle_description}",
+        month_label=(
+            f"من بداية الشهر ({month_start.strftime('%d/%m/%Y')}) "
+            f"حتى يوم الملعب {stadium_today.strftime('%d/%m/%Y')}"
+        ),
+        year_label=(
+            f"من بداية السنة ({year_start.strftime('%d/%m/%Y')}) "
+            f"حتى يوم الملعب {stadium_today.strftime('%d/%m/%Y')}"
+        ),
+        cycle_description=cycle_description,
+        today_summary=get_booking_report_summary(stadium_today.isoformat(), stadium_today.isoformat()),
+        month_summary=get_booking_report_summary(month_start.isoformat(), stadium_today.isoformat()),
+        year_summary=get_booking_report_summary(year_start.isoformat(), stadium_today.isoformat()),
         custom_summary=custom_summary,
         custom_label=custom_label,
         custom_start=custom_start or month_start.isoformat(),
-        custom_end=custom_end or today.isoformat(),
+        custom_end=custom_end or stadium_today.isoformat(),
         error=error,
     ), 400 if error else 200
 

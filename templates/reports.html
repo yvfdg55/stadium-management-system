@@ -23,7 +23,7 @@
       <div>
         <p class="eyebrow">نظام إدارة الملعب</p>
         <h1>التقارير</h1>
-        <p class="muted compact">ملخص الحجوزات السارية والدفعات المسجلة. الحجوزات الملغاة غير مشمولة.</p>
+        <p class="muted compact">تعتمد الحسابات على يوم الملعب {{ cycle_description }}. يُحتسب حجز السبت 23:00 إلى الأحد 01:00 ضمن السبت. الحجوزات الملغاة غير مشمولة.</p>
       </div>
       <a class="button-link secondary" href="{{ url_for('admin_home') }}">الرئيسية</a>
     </header>
@@ -31,7 +31,7 @@
     <section class="report-grid" aria-label="التقارير الجاهزة">
       <article class="report-card">
         <div class="report-card-heading">
-          <h2>تقرير اليوم</h2>
+          <h2>تقرير يوم الملعب</h2>
           <span>{{ today_label }}</span>
         </div>
         {{ report_metrics(today_summary) }}
@@ -61,14 +61,15 @@
       <form class="form-card custom-report-form" method="get" action="{{ url_for('admin_reports') }}">
         <div class="booking-fields">
           <div class="booking-field">
-            <label for="start_date">تاريخ البداية</label>
+            <label for="start_date">تاريخ بداية يوم الملعب</label>
             <input id="start_date" name="start_date" type="date" value="{{ custom_start }}" required>
           </div>
           <div class="booking-field">
-            <label for="end_date">تاريخ النهاية</label>
+            <label for="end_date">تاريخ نهاية يوم الملعب</label>
             <input id="end_date" name="end_date" type="date" value="{{ custom_end }}" required>
           </div>
         </div>
+        <p class="field-help">تُفسّر التواريخ على أنها تواريخ بداية دورات يوم الملعب؛ والحجز الذي يعبر منتصف الليل يبقى ضمن تاريخ بداية دورته.</p>
         <button type="submit">عرض التقرير</button>
       </form>
 
