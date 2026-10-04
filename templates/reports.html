@@ -6,6 +6,7 @@
   <title>التقارير | إدارة الملعب</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   <link rel="stylesheet" href="{{ url_for('theme_css') }}">
+  <script src="{{ url_for('static', filename='js/theme.js') }}" defer></script>
 </head>
 <body>
   {% macro report_metrics(summary) %}
@@ -118,5 +119,6 @@
       }, 60_000);
     })();
   </script>
+  <button class="theme-toggle" data-theme-toggle type="button" aria-label="تبديل الوضع" aria-pressed="false"></button>
 </body>
 </html>

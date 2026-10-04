@@ -4,6 +4,7 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ page_title }} | إدارة الملعب</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}"><link rel="stylesheet" href="{{ url_for('theme_css') }}">
+  <script src="{{ url_for('static', filename='js/theme.js') }}" defer></script>
 </head>
 <body>
   <main class="page-shell">
@@ -29,5 +30,6 @@
       {% else %}<div class="empty-state"><p>لا توجد سجلات مطابقة.</p></div>{% endfor %}
     </section>
   </main>
+  <button class="theme-toggle" data-theme-toggle type="button" aria-label="تبديل الوضع" aria-pressed="false"></button>
 </body>
 </html>
