@@ -24,6 +24,7 @@
         <p class="eyebrow">نظام إدارة الملعب</p>
         <h1>التقارير</h1>
         <p class="muted compact">تعتمد الحسابات على يوم الملعب {{ cycle_description }}. يُحتسب حجز السبت 23:00 إلى الأحد 01:00 ضمن السبت. الحجوزات الملغاة غير مشمولة.</p>
+        <p class="muted compact">تُحدَّث التقارير تلقائيًا كل دقيقة؛ ويتوقف التحديث أثناء تعديل الفترة المخصصة.</p>
       </div>
       <a class="button-link secondary" href="{{ url_for('admin_home') }}">الرئيسية</a>
     </header>
@@ -86,5 +87,20 @@
       {% endif %}
     </section>
   </main>
+  <script>
+    (() => {
+      const customReportForm = document.querySelector('.custom-report-form');
+      let customPeriodChanged = false;
+      if (customReportForm) {
+        customReportForm.addEventListener('input', () => { customPeriodChanged = true; });
+        customReportForm.addEventListener('change', () => { customPeriodChanged = true; });
+      }
+      window.setInterval(() => {
+        if (!customPeriodChanged && document.visibilityState === 'visible') {
+          window.location.reload();
+        }
+      }, 60_000);
+    })();
+  </script>
 </body>
 </html>
