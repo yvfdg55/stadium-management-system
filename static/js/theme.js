@@ -8,7 +8,9 @@
     const isDark = theme === 'dark';
     root.dataset.theme = isDark ? 'dark' : 'light';
     document.querySelectorAll('[data-theme-toggle]').forEach((button) => {
-      button.textContent = isDark ? '☀️ الوضع النهاري' : '🌙 الوضع الليلي';
+      button.textContent = button.classList.contains('header-theme-toggle')
+        ? (isDark ? '☀️' : '🌙')
+        : (isDark ? '☀️ الوضع النهاري' : '🌙 الوضع الليلي');
       button.setAttribute('aria-pressed', String(isDark));
       button.setAttribute('title', isDark ? 'تفعيل الوضع النهاري' : 'تفعيل الوضع الليلي');
     });

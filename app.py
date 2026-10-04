@@ -25,7 +25,6 @@ DEFAULT_SETTINGS = {
     "booking_duration": "1",
     "primary_color": "#2563eb",
     "secondary_color": "#1d4ed8",
-    "background_color": "#f3f6fb",
 }
 
 app = Flask(__name__)
@@ -877,7 +876,6 @@ def settings_page():
         "booking_duration": request.form.get("booking_duration", "").strip(),
         "primary_color": request.form.get("primary_color", "").strip(),
         "secondary_color": request.form.get("secondary_color", "").strip(),
-        "background_color": request.form.get("background_color", "").strip(),
     }
     try:
         hourly_rate = int(values["hourly_rate"])
@@ -892,7 +890,7 @@ def settings_page():
         if not values["venue_name"]:
             raise ValueError("اسم الملعب مطلوب.")
         if any(not re.fullmatch(r"#[0-9a-fA-F]{6}", values[key])
-               for key in ("primary_color", "secondary_color", "background_color")):
+               for key in ("primary_color", "secondary_color")):
             raise ValueError("اختر ألوانًا صالحة من منتقي الألوان.")
         if hourly_rate < 0:
             raise ValueError("سعر الساعة لا يمكن أن يكون سالبًا.")
@@ -934,7 +932,6 @@ def theme_css():
         ":root {\n"
         f"  --blue: {safe_theme_color(settings, 'primary_color')};\n"
         f"  --blue-dark: {safe_theme_color(settings, 'secondary_color')};\n"
-        f"  --bg: {safe_theme_color(settings, 'background_color')};\n"
         "}\n"
     )
     response = Response(css, mimetype="text/css")

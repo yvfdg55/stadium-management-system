@@ -86,7 +86,7 @@ body {
 .sidebar-nav { display: grid; gap: .25rem; margin-top: 1.25rem; }
 .sidebar-label { margin: .85rem .65rem .15rem; color: var(--muted); font-size: .7rem; font-weight: 700; }
 .sidebar-link { display: flex; align-items: center; gap: .65rem; padding: .65rem .75rem; border-radius: var(--radius-sm); color: var(--navy); font-size: .88rem; text-decoration: none; }
-.sidebar-link span { width: 1.2rem; color: var(--blue); text-align: center; font-weight: 700; }
+.sidebar-link span.sidebar-icon { display: inline-grid; place-items: center; flex: 0 0 1.35rem; width: 1.35rem; height: 1.35rem; color: var(--blue); font-family: "Segoe UI Symbol", Tahoma, sans-serif; font-size: 1rem; line-height: 1; text-align: center; }
 .sidebar-link:hover, .sidebar-link.active { color: var(--blue-dark); background: var(--primary-soft); }
 .sidebar-logout { margin-top: auto; }
 .sidebar-logout button { margin-top: 1rem; }
@@ -569,4 +569,14 @@ button.danger:hover { background: #ffe4e6; }
   .hour-card { min-height: 6.5rem; }
   .booking-hours-header { flex-direction: column; align-items: stretch; gap: .65rem; }
   .booking-hours-header > .button-link { align-self: flex-start; }
+}
+@media (max-width: 560px) {
+  .dashboard-header { flex-direction: column; margin-bottom: 1rem; }
+  .dashboard-header-actions { width: 100%; flex-wrap: wrap; }
+  .dashboard-header-actions .button-link { flex: 1 1 auto; }
+  .header-icon-link, .header-theme-toggle, .mobile-menu-toggle { flex: 0 0 2.9rem; width: 2.9rem; padding-inline: 0; }
+  .header-theme-toggle { font-size: 1rem; }
+  .dashboard-stat strong { font-size: 1.15rem; }
+  .performance-chart { gap: .25rem; }
+  .performance-bar-value { font-size: .54rem; }
 }

@@ -13,18 +13,18 @@
     <aside class="dashboard-sidebar" aria-label="التنقل الرئيسي">
       <div class="sidebar-brand"><span class="brand-mark" aria-hidden="true">م</span><div><strong>{{ venue_name }}</strong><small>نظام الإدارة</small></div></div>
       <nav class="sidebar-nav">
-        <a class="sidebar-link active" href="{{ url_for('admin_home') }}"><span>⌂</span>الرئيسية</a>
+        <a class="sidebar-link active" href="{{ url_for('admin_home') }}"><span class="sidebar-icon" aria-hidden="true">⌂</span>الرئيسية</a>
         <p class="sidebar-label">الحجوزات</p>
-        <a class="sidebar-link" href="{{ url_for('booking_screen') }}"><span>▦</span>الحجوزات</a>
-        <a class="sidebar-link" href="{{ url_for('recurring_booking_new') }}"><span>↻</span>الحجوزات الأسبوعية</a>
+        <a class="sidebar-link" href="{{ url_for('booking_screen') }}"><span class="sidebar-icon" aria-hidden="true">▦</span>الحجوزات</a>
+        <a class="sidebar-link" href="{{ url_for('recurring_booking_new') }}"><span class="sidebar-icon" aria-hidden="true">↻</span>الحجوزات الأسبوعية</a>
         <p class="sidebar-label">العملاء والمالية</p>
-        <a class="sidebar-link" href="{{ url_for('clients_list') }}"><span>♙</span>العملاء</a>
-        <a class="sidebar-link" href="{{ url_for('expenses_list') }}"><span>−</span>المصروفات</a>
-        <a class="sidebar-link" href="{{ url_for('income_list') }}"><span>+</span>واردات أخرى</a>
-        <a class="sidebar-link" href="{{ url_for('admin_reports') }}"><span>▥</span>التقارير</a>
+        <a class="sidebar-link" href="{{ url_for('clients_list') }}"><span class="sidebar-icon" aria-hidden="true">♙</span>العملاء</a>
+        <a class="sidebar-link" href="{{ url_for('expenses_list') }}"><span class="sidebar-icon" aria-hidden="true">−</span>المصروفات</a>
+        <a class="sidebar-link" href="{{ url_for('income_list') }}"><span class="sidebar-icon" aria-hidden="true">+</span>واردات أخرى</a>
+        <a class="sidebar-link" href="{{ url_for('admin_reports') }}"><span class="sidebar-icon" aria-hidden="true">▥</span>التقارير</a>
         <p class="sidebar-label">النظام</p>
-        <a class="sidebar-link" href="{{ url_for('settings_page') }}"><span>⚙</span>الإعدادات</a>
-        <a class="sidebar-link" href="{{ url_for('public_schedule') }}" target="_blank" rel="noopener"><span>◉</span>واجهة العملاء</a>
+        <a class="sidebar-link" href="{{ url_for('settings_page') }}"><span class="sidebar-icon" aria-hidden="true">⚙</span>الإعدادات</a>
+        <a class="sidebar-link" href="{{ url_for('public_schedule') }}" target="_blank" rel="noopener"><span class="sidebar-icon" aria-hidden="true">◉</span>واجهة العملاء</a>
       </nav>
       <form class="sidebar-logout" method="post" action="{{ url_for('logout') }}"><button class="secondary" type="submit">تسجيل الخروج</button></form>
     </aside>
