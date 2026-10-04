@@ -31,7 +31,19 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
-python app.py
+python3 - <<'PY'
+from pathlib import Path
+import secrets
+p = Path('.env')
+s = p.read_text().replace('replace-with-a-unique-random-secret-at-least-32-characters', secrets.token_urlsafe(48))
+password = secrets.token_urlsafe(24)
+s = s.replace('replace-with-a-unique-password-at-least-16-characters', password)
+s = s.replace('SESSION_COOKIE_SECURE=true', 'SESSION_COOKIE_SECURE=false')
+p.write_text(s)
+p.chmod(0o600)
+print('Initial admin password:', password)
+PY
+gunicorn --bind 127.0.0.1:5000 app:app
 ```
 
 ثم افتح: `http://127.0.0.1:5000/login`.
@@ -39,9 +51,14 @@ python app.py
 
 يمكن تعديل إعدادات الملعب وساعات التشغيل من صفحة **الإعدادات** في لوحة الإدارة. ويُستخدم `HOURLY_RATE` كقيمة ابتدائية فقط عند تهيئة قاعدة بيانات جديدة. يتطلب إنشاء الحجز إضافة العميل أولًا.
 
-## المسؤول الافتراضي
+## الأمان
 
-- اسم المستخدم: `admin`
-- كلمة المرور: `admin123`
+يُنشأ حساب المسؤول الأول من `ADMIN_USERNAME` و`ADMIN_PASSWORD` في `.env`، ولا توجد بيانات دخول افتراضية. احتفظ بكلمة المرور المطبوعة عند التهيئة، ثم غيّرها من صفحة الحساب. يتطلب بدء قاعدة بيانات جديدة كلمة مرور أولية فريدة بطول 16 حرفًا على الأقل؛ كلمات مرور الحسابات الجديدة يجب أن تكون 12 حرفًا على الأقل.
 
-يُنشأ المستخدم تلقائيًا عند أول تشغيل، وتُحفظ كلمة المرور بصيغة hash داخل SQLite. غيّر بيانات الدخول الافتراضية قبل الاستخدام الفعلي.
+رمز الجلسة يُطلب من `.env` ولا توجد قيمة احتياطية معروفة. تُستخدم كوكيز `Secure` و`HttpOnly` و`SameSite=Lax`، ورموز CSRF لكل نماذج POST، وتُحدد محاولات الدخول الخاطئة. أضف اسم النطاق الفعلي إلى `TRUSTED_HOSTS` عند النشر، واستخدم HTTPS وخادم WSGI مثل Gunicorn؛ لا تعرّض خادم Flask التطويري للإنترنت.
+
+
+`SESSION_COOKIE_SECURE=false` في خطوات التشغيل مخصص لـ`localhost` عبر HTTP فقط؛ عند النشر خلف HTTPS أبقه `true`.
+
+
+اضبط `TRUSTED_PROXY_HOPS` على عدد الوكلاء العكسيين الذين تثق بهم (0 للتشغيل المحلي المباشر)؛ لا ترفع العدد ما لم تكن كل القفزات الأمامية تحت سيطرتك.

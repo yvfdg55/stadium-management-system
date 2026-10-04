@@ -12,6 +12,7 @@
     <header class="page-header"><div><p class="eyebrow">الإدارة المالية</p><h1>{{ page_title }}</h1></div><a class="button-link secondary" href="{{ url_for('expenses_list' if kind == 'expense' else 'income_list') }}">العودة للقائمة</a></header>
     {% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
     <form class="form-card financial-form" method="post">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <div class="booking-fields">
         <div class="booking-field"><label for="amount">المبلغ</label><input id="amount" name="amount" type="number" min="1" step="1" value="{{ form['amount'] }}" required></div>
         <div class="booking-field"><label for="category">النوع</label><select id="category" name="category" required>{% for category in categories %}<option value="{{ category }}" {{ 'selected' if form['category'] == category else '' }}>{{ category }}</option>{% endfor %}</select></div>

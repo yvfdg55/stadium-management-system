@@ -1,19 +1,32 @@
 import calendar
+import hmac
 import os
 import re
+import secrets
 import sqlite3
-from datetime import date, datetime, timedelta
+import time
+from datetime import date, datetime, timedelta, timezone
 from functools import wraps
 from pathlib import Path
 
 from dotenv import load_dotenv
-from flask import Flask, Response, flash, g, redirect, render_template, request, session, url_for
+from flask import Flask, Response, abort, flash, g, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 BASE_DIR = Path(__file__).resolve().parent
-load_dotenv(BASE_DIR / ".env")
+ENV_PATH = BASE_DIR / ".env"
+load_dotenv(ENV_PATH)
+if ENV_PATH.exists():
+    try:
+        os.chmod(ENV_PATH, 0o600)
+    except OSError:
+        pass
+APP_TIMEZONE = timezone(timedelta(hours=int(os.getenv("APP_UTC_OFFSET_HOURS", "3"))))
 DATABASE_PATH = Path(os.getenv("DATABASE_PATH", BASE_DIR / "instance" / "stadium.db"))
-SECRET_KEY = os.getenv("SECRET_KEY", "change-this-secret-key")
+SECRET_KEY = os.getenv("SECRET_KEY", "")
+if len(SECRET_KEY) < 32 or SECRET_KEY.startswith("replace-"):
+    raise RuntimeError("Set SECRET_KEY to a unique random value of at least 32 characters.")
 HOURLY_RATE = int(os.getenv("HOURLY_RATE", "10000"))
 DEFAULT_SETTINGS = {
     "venue_name": "الملعب",
@@ -28,7 +41,63 @@ DEFAULT_SETTINGS = {
 }
 
 app = Flask(__name__)
-app.config.update(SECRET_KEY=SECRET_KEY, DATABASE=str(DATABASE_PATH))
+app.config.update(
+    SECRET_KEY=SECRET_KEY,
+    DATABASE=str(DATABASE_PATH),
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SECURE=os.getenv("SESSION_COOKIE_SECURE", "true").lower() not in {"0", "false", "no"},
+    SESSION_COOKIE_SAMESITE="Lax",
+    PERMANENT_SESSION_LIFETIME=timedelta(minutes=30),
+    MAX_CONTENT_LENGTH=1024 * 1024,
+    TRUSTED_HOSTS=[host.strip() for host in os.getenv("TRUSTED_HOSTS", "").split(",") if host.strip()] or None,
+)
+TRUSTED_PROXY_HOPS = int(os.getenv("TRUSTED_PROXY_HOPS", "0"))
+if TRUSTED_PROXY_HOPS:
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=TRUSTED_PROXY_HOPS, x_proto=TRUSTED_PROXY_HOPS)
+DUMMY_PASSWORD_HASH = generate_password_hash(secrets.token_urlsafe(32))
+
+
+def csrf_token():
+    token = session.get("_csrf_token")
+    if token is None:
+        token = secrets.token_urlsafe(32)
+        session["_csrf_token"] = token
+    return token
+
+
+app.jinja_env.globals["csrf_token"] = csrf_token
+
+
+@app.before_request
+def protect_state_changing_requests():
+    if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+        expected = session.get("_csrf_token", "")
+        supplied = request.form.get("_csrf_token", "")
+        if not expected or not supplied or not hmac.compare_digest(expected, supplied):
+            abort(400, description="Invalid CSRF token")
+        if any(len(value) > 10000 for _key, values in request.form.lists() for value in values):
+            abort(413, description="Form field is too long")
+
+
+@app.after_request
+def add_security_headers(response):
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; "
+        "form-action 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
+        "script-src 'self' 'unsafe-inline'; connect-src 'self'"
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+def app_now():
+    """Return the current app-local wall time as a naive datetime."""
+    return datetime.now(APP_TIMEZONE).replace(tzinfo=None)
 
 
 class BookingConflict(ValueError):
@@ -43,6 +112,10 @@ def get_db():
     if "db" not in g:
         DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
         g.db = sqlite3.connect(app.config["DATABASE"])
+        try:
+            os.chmod(DATABASE_PATH, 0o600)
+        except OSError:
+            app.logger.warning("Could not restrict database file permissions")
         g.db.row_factory = sqlite3.Row
         g.db.execute("PRAGMA foreign_keys = ON")
     return g.db
@@ -86,7 +159,7 @@ def cycle_offset(value, cycle_start_minutes):
 
 def stadium_business_date(moment=None, settings=None):
     """Return the date on which the current stadium-day cycle began."""
-    moment = moment or datetime.now()
+    moment = moment or app_now()
     settings = settings or get_app_settings()
     business_date = moment.date()
     if moment.hour * 60 + moment.minute < clock_minutes(settings["work_start"]):
@@ -176,7 +249,22 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT NOT NULL UNIQUE,
             password_hash TEXT NOT NULL,
+            session_version INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    admin_columns = {row[1] for row in db.execute("PRAGMA table_info(admins)").fetchall()}
+    legacy_admin_schema = "session_version" not in admin_columns
+    if "session_version" not in admin_columns:
+        db.execute("ALTER TABLE admins ADD COLUMN session_version INTEGER NOT NULL DEFAULT 0")
+    db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS login_attempts (
+            remote_addr TEXT PRIMARY KEY,
+            failures INTEGER NOT NULL DEFAULT 0,
+            window_started REAL NOT NULL,
+            locked_until REAL NOT NULL DEFAULT 0
         )
         """
     )
@@ -319,11 +407,26 @@ def init_db():
         "INSERT OR IGNORE INTO app_settings (setting_key, setting_value) VALUES (?, ?)",
         tuple(DEFAULT_SETTINGS.items()),
     )
-    admin = db.execute("SELECT id FROM admins WHERE username = ?", ("admin",)).fetchone()
+    admin = db.execute("SELECT id, password_hash FROM admins LIMIT 1").fetchone()
     if admin is None:
+        admin_username = os.getenv("ADMIN_USERNAME", "admin").strip()
+        admin_password = os.getenv("ADMIN_PASSWORD", "")
+        if (not admin_username or len(admin_username) > 64 or len(admin_password) < 16
+                or len(admin_password) > 1024 or admin_password.startswith("replace-")):
+            raise RuntimeError(
+                "For a new database, set ADMIN_USERNAME and a unique ADMIN_PASSWORD of at least 16 characters."
+            )
         db.execute(
             "INSERT INTO admins (username, password_hash) VALUES (?, ?)",
-            ("admin", generate_password_hash("admin123")),
+            (admin_username, generate_password_hash(admin_password)),
+        )
+    elif legacy_admin_schema:
+        replacement_password = os.getenv("ADMIN_PASSWORD", "")
+        if len(replacement_password) < 16 or replacement_password.startswith("replace-"):
+            raise RuntimeError("The default admin password is still active; set a unique ADMIN_PASSWORD before starting.")
+        db.execute(
+            "UPDATE admins SET password_hash = ?, session_version = session_version + 1 WHERE id = ?",
+            (generate_password_hash(replacement_password), admin["id"]),
         )
     db.commit()
 
@@ -340,6 +443,14 @@ def login_required(view):
     def wrapped_view(*args, **kwargs):
         if session.get("admin_id") is None:
             return redirect(url_for("login"))
+        admin = get_db().execute(
+            "SELECT session_version FROM admins WHERE id = ?", (session["admin_id"],)
+        ).fetchone()
+        if admin is None or session.get("session_version") != admin["session_version"]:
+            session.clear()
+            return redirect(url_for("login"))
+        session.permanent = True
+        session.modified = True
         return view(*args, **kwargs)
 
     return wrapped_view
@@ -740,17 +851,55 @@ def home():
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        username = request.form.get("username", "").strip()
-        password = request.form.get("password", "")
+        username = request.form.get("username", "").strip()[:64]
+        password = request.form.get("password", "")[:1025]
+        db = get_db()
+        remote_addr = (request.remote_addr or "unknown")[:128]
+        now = time.time()
+        attempt = db.execute(
+            "SELECT failures, window_started, locked_until FROM login_attempts WHERE remote_addr = ?",
+            (remote_addr,),
+        ).fetchone()
+        if attempt is not None and attempt["locked_until"] > now:
+            flash("اسم المستخدم أو كلمة المرور غير صحيحة. حاول لاحقًا.", "error")
+            settings = get_app_settings()
+            venue_phone = settings.get("venue_phone", "").strip()
+            return render_template("login.html", venue_phone=venue_phone, whatsapp_number=re.sub(r"\D", "", venue_phone)), 429
         admin = get_db().execute(
-            "SELECT id, username, password_hash FROM admins WHERE username = ?",
+            "SELECT id, username, password_hash, session_version FROM admins WHERE username = ?",
             (username,),
         ).fetchone()
-        if admin is not None and check_password_hash(admin["password_hash"], password):
+        password_matches = check_password_hash(
+            admin["password_hash"] if admin is not None else DUMMY_PASSWORD_HASH, password
+        )
+        if admin is not None and password_matches:
+            db.execute("DELETE FROM login_attempts WHERE remote_addr = ?", (remote_addr,))
+            db.commit()
             session.clear()
+            session.permanent = True
             session["admin_id"] = admin["id"]
             session["admin_username"] = admin["username"]
+            session["session_version"] = admin["session_version"]
             return redirect(url_for("admin_home"))
+        if attempt is not None and now - attempt["window_started"] < 900:
+            failures = attempt["failures"] + 1
+            window_started = attempt["window_started"]
+        else:
+            failures = 1
+            window_started = now
+        locked_until = now + 900 if failures >= 5 else 0
+        db.execute(
+            """
+            INSERT INTO login_attempts (remote_addr, failures, window_started, locked_until)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(remote_addr) DO UPDATE SET
+                failures=excluded.failures, window_started=excluded.window_started,
+                locked_until=excluded.locked_until
+            """,
+            (remote_addr, failures, window_started, locked_until),
+        )
+        db.execute("DELETE FROM login_attempts WHERE window_started < ?", (now - 86400,))
+        db.commit()
         flash("اسم المستخدم أو كلمة المرور غير صحيحة.", "error")
     settings = get_app_settings()
     venue_phone = settings.get("venue_phone", "").strip()
@@ -766,7 +915,8 @@ def admin_home():
     booking_summary = get_booking_report_summary(today, today)
     finance_summary = get_finance_summary(today, today)
     cycle_start_minutes, window_minutes = work_window(settings)
-    current_minutes = datetime.now().hour * 60 + datetime.now().minute
+    current_time = app_now()
+    current_minutes = current_time.hour * 60 + current_time.minute
     current_offset = (current_minutes - cycle_start_minutes) % (24 * 60)
     current_booking = None
     current_rows = get_db().execute(
@@ -811,7 +961,7 @@ def admin_home():
         "admin_home.html", username=session.get("admin_username"),
         venue_name=settings["venue_name"],
         dashboard_date=today,
-        current_time=datetime.now().strftime("%H:%M"),
+        current_time=current_time.strftime("%H:%M"),
         dashboard_finance=get_finance_summary(today, today),
         dashboard_stats=dashboard_stats,
         dashboard_performance=dashboard_performance,
@@ -825,7 +975,9 @@ def admin_home():
 def admin_account():
     db = get_db()
     admin_id = session["admin_id"]
-    admin = db.execute("SELECT id, username, password_hash FROM admins WHERE id = ?", (admin_id,)).fetchone()
+    admin = db.execute(
+        "SELECT id, username, password_hash, session_version FROM admins WHERE id = ?", (admin_id,)
+    ).fetchone()
     if admin is None:
         session.clear()
         return redirect(url_for("login"))
@@ -837,12 +989,12 @@ def admin_account():
         new_password = request.form.get("new_password", "")
         confirm_password = request.form.get("confirm_password", "")
         try:
-            if not form["username"]:
-                raise ValueError("اسم المستخدم مطلوب.")
+            if not form["username"] or len(form["username"]) > 64:
+                raise ValueError("اسم المستخدم مطلوب ويجب ألا يتجاوز 64 حرفًا.")
             if not check_password_hash(admin["password_hash"], current_password):
                 raise ValueError("كلمة المرور الحالية غير صحيحة.")
-            if new_password and len(new_password) < 6:
-                raise ValueError("كلمة المرور الجديدة يجب ألا تقل عن 6 أحرف.")
+            if new_password and not 12 <= len(new_password) <= 1024:
+                raise ValueError("كلمة المرور الجديدة يجب أن تكون بين 12 و1024 حرفًا.")
             if new_password != confirm_password:
                 raise ValueError("تأكيد كلمة المرور غير مطابق.")
             duplicate = db.execute(
@@ -852,9 +1004,10 @@ def admin_account():
                 raise ValueError("اسم المستخدم مستخدم بالفعل.")
             if new_password:
                 db.execute(
-                    "UPDATE admins SET username = ?, password_hash = ? WHERE id = ?",
+                    "UPDATE admins SET username = ?, password_hash = ?, session_version = session_version + 1 WHERE id = ?",
                     (form["username"], generate_password_hash(new_password), admin_id),
                 )
+                session["session_version"] = admin["session_version"] + 1
             else:
                 db.execute("UPDATE admins SET username = ? WHERE id = ?", (form["username"], admin_id))
             db.commit()
@@ -949,7 +1102,7 @@ def theme_css():
 @login_required
 def admin_reports():
     settings = get_app_settings()
-    stadium_today = stadium_business_date(datetime.now(), settings)
+    stadium_today = stadium_business_date(app_now(), settings)
     month_start = stadium_today.replace(day=1)
     year_start = date(stadium_today.year, 1, 1)
     cycle_start_minutes, cycle_minutes = work_window(settings)
@@ -1584,24 +1737,37 @@ def financial_values(form, field_name):
 
 
 def financial_list(kind):
-    table = "expenses" if kind == "expense" else "other_income"
-    date_field = "expense_date" if kind == "expense" else "income_date"
+    is_expense = kind == "expense"
+    if not is_expense and kind != "income":
+        abort(404)
+    date_field = "expense_date" if is_expense else "income_date"
     query = request.args.get("q", "").strip()
     start = request.args.get("start_date", "").strip()
     end = request.args.get("end_date", "").strip()
-    conditions, params = [], []
-    if query:
-        conditions.append("(category LIKE ? OR description LIKE ? OR notes LIKE ?)")
-        params.extend([f"%{query}%"] * 3)
-    if start:
-        conditions.append(f"{date_field} >= ?"); params.append(start)
-    if end:
-        conditions.append(f"{date_field} <= ?"); params.append(end)
-    where = " WHERE " + " AND ".join(conditions) if conditions else ""
-    entries = get_db().execute(
-        f"SELECT * FROM {table}{where} ORDER BY {date_field} DESC, id DESC", params
-    ).fetchall()
-    is_expense = kind == "expense"
+    like_query = f"%{query}%"
+    params = (query, like_query, like_query, like_query, start, start, end, end)
+    if is_expense:
+        entries = get_db().execute(
+            """
+            SELECT * FROM expenses
+            WHERE (? = '' OR category LIKE ? OR description LIKE ? OR notes LIKE ?)
+              AND (? = '' OR expense_date >= ?)
+              AND (? = '' OR expense_date <= ?)
+            ORDER BY expense_date DESC, id DESC
+            """,
+            params,
+        ).fetchall()
+    else:
+        entries = get_db().execute(
+            """
+            SELECT * FROM other_income
+            WHERE (? = '' OR category LIKE ? OR description LIKE ? OR notes LIKE ?)
+              AND (? = '' OR income_date >= ?)
+              AND (? = '' OR income_date <= ?)
+            ORDER BY income_date DESC, id DESC
+            """,
+            params,
+        ).fetchall()
     return render_template(
         "financial_list.html", entries=entries, kind=kind,
         page_title="المصروفات" if is_expense else "واردات أخرى",
@@ -1626,11 +1792,15 @@ def income_list():
 
 def financial_form(kind, record_id=None):
     is_expense = kind == "expense"
-    table = "expenses" if is_expense else "other_income"
+    if not is_expense and kind != "income":
+        abort(404)
     date_field = "expense_date" if is_expense else "income_date"
     categories = EXPENSE_CATEGORIES if is_expense else INCOME_CATEGORIES
     if record_id:
-        record = get_db().execute(f"SELECT * FROM {table} WHERE id = ?", (record_id,)).fetchone()
+        if is_expense:
+            record = get_db().execute("SELECT * FROM expenses WHERE id = ?", (record_id,)).fetchone()
+        else:
+            record = get_db().execute("SELECT * FROM other_income WHERE id = ?", (record_id,)).fetchone()
         if record is None:
             flash("السجل غير موجود.", "error")
             return redirect(url_for("expenses_list" if is_expense else "income_list"))
@@ -1645,15 +1815,27 @@ def financial_form(kind, record_id=None):
         try:
             values = financial_values(request.form, date_field)
             if record_id:
-                get_db().execute(
-                    f"UPDATE {table} SET amount=?, category=?, description=?, payment_method=?, {date_field}=?, notes=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
-                    (values["amount"], values["category"], values["description"], values["payment_method"], values[date_field], values["notes"], record_id),
-                )
+                if is_expense:
+                    get_db().execute(
+                        "UPDATE expenses SET amount=?, category=?, description=?, payment_method=?, expense_date=?, notes=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                        (values["amount"], values["category"], values["description"], values["payment_method"], values[date_field], values["notes"], record_id),
+                    )
+                else:
+                    get_db().execute(
+                        "UPDATE other_income SET amount=?, category=?, description=?, payment_method=?, income_date=?, notes=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                        (values["amount"], values["category"], values["description"], values["payment_method"], values[date_field], values["notes"], record_id),
+                    )
             else:
-                get_db().execute(
-                    f"INSERT INTO {table} (amount, category, description, payment_method, {date_field}, notes) VALUES (?, ?, ?, ?, ?, ?)",
-                    (values["amount"], values["category"], values["description"], values["payment_method"], values[date_field], values["notes"]),
-                )
+                if is_expense:
+                    get_db().execute(
+                        "INSERT INTO expenses (amount, category, description, payment_method, expense_date, notes) VALUES (?, ?, ?, ?, ?, ?)",
+                        (values["amount"], values["category"], values["description"], values["payment_method"], values[date_field], values["notes"]),
+                    )
+                else:
+                    get_db().execute(
+                        "INSERT INTO other_income (amount, category, description, payment_method, income_date, notes) VALUES (?, ?, ?, ?, ?, ?)",
+                        (values["amount"], values["category"], values["description"], values["payment_method"], values[date_field], values["notes"]),
+                    )
             get_db().commit()
             flash("تم حفظ السجل بنجاح.", "success")
             return redirect(url_for("expenses_list" if is_expense else "income_list"))
@@ -1879,4 +2061,4 @@ with app.app_context():
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", "5000")), debug=False)
+    app.run(host=os.getenv("HOST", "127.0.0.1"), port=int(os.getenv("PORT", "5000")), debug=False)

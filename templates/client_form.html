@@ -26,6 +26,7 @@
     {% endwith %}
 
     <form method="post" class="form-card">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <label for="name">الاسم</label>
       <input id="name" name="name" type="text" value="{{ client['name'] if client else '' }}" required autofocus>
 

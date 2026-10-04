@@ -41,6 +41,7 @@
         <div><span>العربون المحفوظ</span><strong>{{ '{:,}'.format(booking['deposit_held']) }}</strong></div>
         <span class="payment-state deposit">{{ booking['deposit_status'] }}</span>
         <form method="post" action="{{ url_for('booking_deposit_refund', booking_id=booking['id']) }}" onsubmit="return confirm('هل تريد تأكيد استرداد العربون؟');">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
           <select name="payment_method" aria-label="طريقة استرداد العربون"><option value="cash">نقدي</option><option value="transfer">تحويل</option></select>
           <input name="note" type="text" placeholder="ملاحظة اختيارية">
           <button class="secondary" type="submit">استرداد العربون</button>
@@ -52,6 +53,7 @@
 
     {% if booking['status'] == 'active' and booking['remaining'] > 0 %}
       <form class="form-card payment-form" method="post">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <h2>تسجيل دفعة جديدة</h2>
         <div class="booking-field">
           <label for="amount">قيمة الدفعة</label>

@@ -13,6 +13,7 @@
     {% with messages = get_flashed_messages(with_categories=true) %}{% for category, message in messages %}<div class="alert {{ category }}" role="status">{{ message }}</div>{% endfor %}{% endwith %}
     {% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
     <form class="form-card account-form" method="post">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <div class="booking-field"><label for="username">اسم المستخدم الجديد</label><input id="username" name="username" type="text" autocomplete="username" value="{{ form['username'] }}" required></div>
       <div class="booking-field"><label for="current_password">كلمة المرور الحالية</label><input id="current_password" name="current_password" type="password" autocomplete="current-password" required></div>
       <div class="booking-field"><label for="new_password">كلمة المرور الجديدة</label><input id="new_password" name="new_password" type="password" autocomplete="new-password" minlength="6"><span class="field-help">اتركها فارغة إذا أردت تغيير اسم المستخدم فقط.</span></div>

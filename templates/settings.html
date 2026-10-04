@@ -28,6 +28,7 @@
     {% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
 
     <form class="form-card settings-form" method="post" action="{{ url_for('settings_page') }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <div class="booking-fields">
         <div class="booking-field">
           <label for="venue_name">اسم الملعب</label>

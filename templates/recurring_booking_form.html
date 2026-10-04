@@ -23,6 +23,7 @@
     {% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
 
     <form class="form-card recurring-form" method="post" action="{{ url_for('recurring_booking_new', rule_id=rule_id) if rule_id else url_for('recurring_booking_new') }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <div class="booking-fields">
         <div class="booking-field">
           <label for="client_id">العميل</label>
@@ -67,6 +68,7 @@
     </form>
     {% if rule_id %}
       <form method="post" action="{{ url_for('recurring_booking_stop', rule_id=rule_id) }}" onsubmit="return confirm('هل تريد إيقاف الحجز الأسبوعي؟');">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <button class="danger" type="submit">إيقاف الحجز الأسبوعي</button>
       </form>
     {% endif %}

@@ -26,7 +26,8 @@
       {% for entry in entries %}
         <article class="finance-entry">
           <div><strong>{{ '{:,}'.format(entry['amount']) }} جنيه</strong><span>{{ entry['category'] }} — {{ entry['description'] or 'بدون وصف' }}</span><span>{{ entry[date_field] }} — {{ 'نقدي' if entry['payment_method'] == 'cash' else 'تحويل' }}</span>{% if entry['notes'] %}<span>{{ entry['notes'] }}</span>{% endif %}</div>
-          <div class="card-actions"><a class="button-link small" href="{{ url_for(edit_endpoint, record_id=entry['id']) }}">تعديل</a><form method="post" action="{{ url_for(delete_endpoint, record_id=entry['id']) }}" onsubmit="return confirm('هل تريد حذف هذا السجل؟');"><button class="danger small" type="submit">حذف</button></form></div>
+          <div class="card-actions"><a class="button-link small" href="{{ url_for(edit_endpoint, record_id=entry['id']) }}">تعديل</a><form method="post" action="{{ url_for(delete_endpoint, record_id=entry['id']) }}" onsubmit="return confirm('هل تريد حذف هذا السجل؟');">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="danger small" type="submit">حذف</button></form></div>
         </article>
       {% else %}<div class="empty-state"><p>لا توجد سجلات مطابقة.</p></div>{% endfor %}
     </section>

@@ -23,6 +23,7 @@
       {% endwith %}
 
       <form method="post" class="login-form">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <label for="username">اسم المستخدم</label>
         <input id="username" name="username" type="text" autocomplete="username" required autofocus>
 

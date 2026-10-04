@@ -34,6 +34,7 @@
     <form class="form-card booking-form" method="post"
           action="{{ url_for('booking_edit', booking_id=booking_id) if booking_id else url_for('booking_new') }}"
           data-cycle-start="{{ cycle_start }}" data-window-hours="{{ window_hours }}" data-already-paid="{{ already_paid }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <div class="booking-fields">
         <div class="booking-field">
           <label for="client_id">العميل</label>
@@ -136,7 +137,8 @@
 
     {% if booking_id %}
       <form id="cancel-booking" method="post" action="{{ url_for('booking_cancel', booking_id=booking_id) }}"
-            onsubmit="return confirm('هل تريد إلغاء هذا الحجز؟');"></form>
+            onsubmit="return confirm('هل تريد إلغاء هذا الحجز؟');">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"></form>
     {% endif %}
   </main>
 
