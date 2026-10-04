@@ -32,7 +32,7 @@
     <main class="dashboard-main">
       <header class="dashboard-header">
         <div><p class="eyebrow">لوحة التحكم</p><h1>مرحبًا، {{ username }}</h1><p class="dashboard-date">{{ dashboard_date }}</p></div>
-        <div class="dashboard-header-actions"><a class="button-link secondary" href="{{ url_for('admin_account') }}">حسابي</a><button class="mobile-menu-toggle secondary" type="button" aria-label="فتح القائمة">القائمة</button></div>
+        <div class="dashboard-header-actions"><a class="header-icon-link secondary" href="{{ url_for('settings_page') }}" aria-label="الإعدادات" title="الإعدادات">⚙</a><button class="theme-toggle header-theme-toggle" data-theme-toggle type="button" aria-label="تبديل الوضع" aria-pressed="false"></button><a class="button-link secondary" href="{{ url_for('admin_account') }}">حسابي</a><button class="mobile-menu-toggle secondary" type="button" aria-label="فتح القائمة">القائمة</button></div>
       </header>
 
       <section class="dashboard-stat-grid" aria-label="إحصائيات اليوم">
@@ -106,7 +106,7 @@
       </section>
     </main>
   </div>
-  <button class="theme-toggle" data-theme-toggle type="button" aria-label="تبديل الوضع" aria-pressed="false"></button>
+  <button class="theme-toggle dashboard-floating-theme" data-theme-toggle type="button" aria-label="تبديل الوضع" aria-pressed="false"></button>
   <script>
     (() => { const button = document.querySelector('.mobile-menu-toggle'); const sidebar = document.querySelector('.dashboard-sidebar'); if (button && sidebar) button.addEventListener('click', () => sidebar.classList.toggle('is-open')); })();
   </script>

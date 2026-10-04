@@ -93,6 +93,10 @@ body {
 .dashboard-date { margin: .35rem 0 0; color: var(--muted); font-size: .82rem; }
 .dashboard-header-actions { display: flex; gap: .5rem; align-items: center; }
 .dashboard-header-actions .button-link { margin-top: 0; }
+.header-icon-link { display: inline-flex; align-items: center; justify-content: center; width: 2.9rem; min-height: 2.9rem; border-radius: var(--radius-sm); color: var(--navy); background: #e8eef8; text-decoration: none; font-size: 1.1rem; }
+.header-icon-link:hover { background: #dbe5f4; }
+.header-theme-toggle { position: static; width: auto; min-height: 2.9rem; padding: .65rem .8rem; box-shadow: none; font-size: .78rem; }
+.dashboard-floating-theme { display: none; }
 .mobile-menu-toggle { width: auto; margin: 0; }
 .quick-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; max-width: 80rem; margin: 1.25rem auto 0; }
 .quick-action { display: grid; gap: .25rem; padding: .85rem; border: 1px solid var(--line); border-radius: var(--radius-md); color: var(--navy); background: var(--surface); text-decoration: none; box-shadow: var(--shadow-soft); }
