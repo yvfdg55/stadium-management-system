@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ page_title }} | إدارة الملعب</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}"><link rel="stylesheet" href="{{ url_for('theme_css') }}">
+</head>
+<body>
+  <main class="page-shell">
+    <header class="page-header">
+      <div><p class="eyebrow">الإدارة المالية</p><h1>{{ page_title }}</h1></div>
+      <div class="client-detail-actions"><a class="button-link" href="{{ url_for(new_endpoint) }}">إضافة سجل</a><a class="button-link secondary" href="{{ url_for('admin_home') }}">الرئيسية</a></div>
+    </header>
+    {% with messages = get_flashed_messages(with_categories=true) %}{% for category, message in messages %}<div class="alert {{ category }}" role="status">{{ message }}</div>{% endfor %}{% endwith %}
+    <form class="form-card finance-filter" method="get">
+      <div class="booking-fields">
+        <div class="booking-field"><label for="q">بحث</label><input id="q" name="q" type="search" value="{{ query }}" placeholder="النوع أو الوصف أو الملاحظات"></div>
+        <div class="booking-field"><label for="start_date">من تاريخ</label><input id="start_date" name="start_date" type="date" value="{{ start_date }}"></div>
+        <div class="booking-field"><label for="end_date">إلى تاريخ</label><input id="end_date" name="end_date" type="date" value="{{ end_date }}"></div>
+      </div>
+      <button type="submit">بحث وفلترة</button>
+    </form>
+    <section class="finance-list">
+      {% for entry in entries %}
+        <article class="finance-entry">
+          <div><strong>{{ '{:,}'.format(entry['amount']) }} جنيه</strong><span>{{ entry['category'] }} — {{ entry['description'] or 'بدون وصف' }}</span><span>{{ entry[date_field] }} — {{ 'نقدي' if entry['payment_method'] == 'cash' else 'تحويل' }}</span>{% if entry['notes'] %}<span>{{ entry['notes'] }}</span>{% endif %}</div>
+          <div class="card-actions"><a class="button-link small" href="{{ url_for(edit_endpoint, record_id=entry['id']) }}">تعديل</a><form method="post" action="{{ url_for(delete_endpoint, record_id=entry['id']) }}" onsubmit="return confirm('هل تريد حذف هذا السجل؟');"><button class="danger small" type="submit">حذف</button></form></div>
+        </article>
+      {% else %}<div class="empty-state"><p>لا توجد سجلات مطابقة.</p></div>{% endfor %}
+    </section>
+  </main>
+</body>
+</html>

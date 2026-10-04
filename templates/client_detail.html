@@ -29,6 +29,20 @@
       <div class="client-stat"><span>إجمالي المتبقي</span><strong>{{ '{:,}'.format(summary['total_remaining']) }}</strong></div>
     </section>
 
+    <section class="deposit-client-section" aria-labelledby="client-deposit-title">
+      <div class="section-heading"><h2 id="client-deposit-title">العربون المحفوظ</h2><strong>{{ '{:,}'.format(deposit_summary['held']) }} جنيه</strong></div>
+      <div class="client-stat-grid">
+        <div class="client-stat"><span>إجمالي العربون المحصل</span><strong>{{ '{:,}'.format(deposit_summary['collected']) }}</strong></div>
+        <div class="client-stat"><span>إجمالي العربون المسترد</span><strong>{{ '{:,}'.format(deposit_summary['refunded']) }}</strong></div>
+        <div class="client-stat"><span>العربون المحتفظ به</span><strong>{{ '{:,}'.format(deposit_summary['held']) }}</strong></div>
+      </div>
+      <div class="deposit-ledger">
+        {% for item in deposit_transactions %}
+          <div class="deposit-ledger-row"><span>{{ 'تحصيل عربون' if item['transaction_type'] == 'collect' else 'استرداد عربون' }} — {{ item['created_at'] }}</span><strong>{{ '{:,}'.format(item['amount']) }}</strong></div>
+        {% else %}<p class="muted">لا توجد حركات عربون.</p>{% endfor %}
+      </div>
+    </section>
+
     <section aria-labelledby="client-bookings-title">
       <div class="section-heading">
         <h2 id="client-bookings-title">سجل الحجوزات</h2>

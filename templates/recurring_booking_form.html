@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>حجز متكرر | إدارة الملعب</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('theme_css') }}">
+</head>
+<body>
+  <main class="page-shell narrow recurring-page">
+    <header class="page-header">
+      <div>
+        <p class="eyebrow recurring-eyebrow">الحجز المتكرر</p>
+        <h1>{{ 'تعديل الحجز الأسبوعي' if rule_id else 'حجز أسبوعي دائم' }}</h1>
+      </div>
+      <a class="button-link secondary" href="{{ url_for('booking_screen') }}">الحجوزات</a>
+    </header>
+
+    <div class="recurring-notice">هذا الحجز يتكرر كل أسبوع في اليوم والساعة المحددين، ولا يرتبط بتاريخ انتهاء.</div>
+    {% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
+
+    <form class="form-card recurring-form" method="post" action="{{ url_for('recurring_booking_new', rule_id=rule_id) if rule_id else url_for('recurring_booking_new') }}">
+      <div class="booking-fields">
+        <div class="booking-field">
+          <label for="client_id">العميل</label>
+          <select id="client_id" name="client_id" required>
+            <option value="">اختر العميل</option>
+            {% for client in clients %}
+              <option value="{{ client['id'] }}" {{ 'selected' if form['client_id'] == client['id']|string else '' }}>{{ client['name'] }} — {{ client['phone'] }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="booking-field">
+          <label for="weekday">اليوم الأسبوعي</label>
+          <select id="weekday" name="weekday" required>
+            {% for value, label in [(0, 'الاثنين'), (1, 'الثلاثاء'), (2, 'الأربعاء'), (3, 'الخميس'), (4, 'الجمعة'), (5, 'السبت'), (6, 'الأحد')] %}
+              <option value="{{ value }}" {{ 'selected' if form['weekday'] == value|string else '' }}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="booking-field">
+          <label for="start_time">وقت البداية</label>
+          <input id="start_time" name="start_time" type="time" value="{{ form['start_time'] }}" required>
+        </div>
+        <div class="booking-field">
+          <label for="duration_hours">عدد الساعات</label>
+          <input id="duration_hours" name="duration_hours" type="number" min="1" step="1" value="{{ form['duration_hours'] }}" required>
+        </div>
+        <div class="booking-field">
+          <label for="hourly_rate">سعر الساعة</label>
+          <input id="hourly_rate" name="hourly_rate" type="number" min="0" step="1" value="{{ form['hourly_rate'] }}" required>
+        </div>
+        <div class="booking-field">
+          <label for="deposit">العربون الثابت</label>
+          <input id="deposit" name="deposit" type="number" min="0" step="1" value="{{ form['deposit'] }}" required>
+          <small class="field-help">العربون مستقل وثابت ولا يُخصم من قيمة الحجز.</small>
+        </div>
+        <div class="booking-field notes-field">
+          <label for="notes">ملاحظات</label>
+          <textarea id="notes" name="notes" rows="4">{{ form['notes'] }}</textarea>
+        </div>
+      </div>
+      <button class="recurring-button" type="submit">{{ 'حفظ تعديل الحجز' if rule_id else 'حفظ الحجز الأسبوعي الدائم' }}</button>
+    </form>
+    {% if rule_id %}
+      <form method="post" action="{{ url_for('recurring_booking_stop', rule_id=rule_id) }}" onsubmit="return confirm('هل تريد إيقاف الحجز الأسبوعي؟');">
+        <button class="danger" type="submit">إيقاف الحجز الأسبوعي</button>
+      </form>
+    {% endif %}
+  </main>
+</body>
+</html>

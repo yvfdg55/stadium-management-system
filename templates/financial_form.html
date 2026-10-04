@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ page_title }} | إدارة الملعب</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}"><link rel="stylesheet" href="{{ url_for('theme_css') }}">
+</head>
+<body>
+  <main class="page-shell narrow">
+    <header class="page-header"><div><p class="eyebrow">الإدارة المالية</p><h1>{{ page_title }}</h1></div><a class="button-link secondary" href="{{ url_for('expenses_list' if kind == 'expense' else 'income_list') }}">العودة للقائمة</a></header>
+    {% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
+    <form class="form-card financial-form" method="post">
+      <div class="booking-fields">
+        <div class="booking-field"><label for="amount">المبلغ</label><input id="amount" name="amount" type="number" min="1" step="1" value="{{ form['amount'] }}" required></div>
+        <div class="booking-field"><label for="category">النوع</label><select id="category" name="category" required>{% for category in categories %}<option value="{{ category }}" {{ 'selected' if form['category'] == category else '' }}>{{ category }}</option>{% endfor %}</select></div>
+        <div class="booking-field" id="custom-category-field"><label for="custom_category">اسم النوع الآخر</label><input id="custom_category" name="custom_category" type="text" value="{{ form.get('custom_category', '') }}"></div>
+        <div class="booking-field"><label for="{{ date_field }}">التاريخ</label><input id="{{ date_field }}" name="{{ date_field }}" type="date" value="{{ form[date_field] }}" required></div>
+        <div class="booking-field"><label for="payment_method">طريقة الدفع / الاستلام</label><select id="payment_method" name="payment_method"><option value="cash" {{ 'selected' if form['payment_method'] == 'cash' else '' }}>نقدي</option><option value="transfer" {{ 'selected' if form['payment_method'] == 'transfer' else '' }}>تحويل</option></select></div>
+        <div class="booking-field"><label for="description">الوصف / الملاحظة</label><input id="description" name="description" type="text" value="{{ form['description'] }}"></div>
+        <div class="booking-field notes-field"><label for="notes">ملاحظات إضافية</label><textarea id="notes" name="notes" rows="4">{{ form['notes'] }}</textarea></div>
+      </div>
+      <button type="submit">حفظ</button>
+    </form>
+  </main>
+  <script>
+    (() => { const category = document.getElementById('category'); const field = document.getElementById('custom-category-field'); const update = () => { field.hidden = category.value !== 'أخرى'; }; category.addEventListener('change', update); update(); })();
+  </script>
+</body>
+</html>

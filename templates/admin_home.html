@@ -14,10 +14,21 @@
       <p class="eyebrow">نظام إدارة الملعب</p>
       <h1 id="page-title">مرحبًا، {{ username }}</h1>
       <p class="muted">تم تسجيل الدخول بنجاح.</p>
+      <section class="dashboard-finance" aria-label="ملخص اليوم المالي">
+        <div><span>دخل الحجوزات</span><strong>{{ '{:,}'.format(dashboard_finance['booking_income']) }}</strong></div>
+        <div><span>الواردات الأخرى</span><strong>{{ '{:,}'.format(dashboard_finance['other_income']) }}</strong></div>
+        <div><span>إجمالي الإيرادات</span><strong>{{ '{:,}'.format(dashboard_finance['total_income']) }}</strong></div>
+        <div><span>المصروفات</span><strong>{{ '{:,}'.format(dashboard_finance['expenses']) }}</strong></div>
+        <div><span>صافي الدخل</span><strong>{{ '{:,}'.format(dashboard_finance['net_income']) }}</strong></div>
+      </section>
       <a class="button-link" href="{{ url_for('booking_screen') }}">الحجوزات</a>
+      <a class="button-link recurring-button" href="{{ url_for('recurring_booking_new') }}">الحجز المتكرر</a>
+      <a class="button-link" href="{{ url_for('expenses_list') }}">المصروفات</a>
+      <a class="button-link" href="{{ url_for('income_list') }}">واردات أخرى</a>
       <a class="button-link" href="{{ url_for('clients_list') }}">إدارة العملاء</a>
       <a class="button-link" href="{{ url_for('admin_reports') }}">التقارير</a>
       <a class="button-link" href="{{ url_for('settings_page') }}">الإعدادات</a>
+      <a class="button-link secondary" href="{{ url_for('admin_account') }}">حساب الأدمن</a>
       <form method="post" action="{{ url_for('logout') }}">
         <button type="submit" class="secondary">تسجيل الخروج</button>
       </form>

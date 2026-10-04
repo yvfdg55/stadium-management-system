@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>حساب الأدمن | إدارة الملعب</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}"><link rel="stylesheet" href="{{ url_for('theme_css') }}">
+</head>
+<body>
+  <main class="page-shell narrow">
+    <header class="page-header"><div><p class="eyebrow">نظام إدارة الملعب</p><h1>حساب الأدمن</h1><p class="muted compact">يمكنك تغيير اسم المستخدم وكلمة المرور من هنا.</p></div><a class="button-link secondary" href="{{ url_for('admin_home') }}">الرئيسية</a></header>
+    {% with messages = get_flashed_messages(with_categories=true) %}{% for category, message in messages %}<div class="alert {{ category }}" role="status">{{ message }}</div>{% endfor %}{% endwith %}
+    {% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
+    <form class="form-card account-form" method="post">
+      <div class="booking-field"><label for="username">اسم المستخدم الجديد</label><input id="username" name="username" type="text" autocomplete="username" value="{{ form['username'] }}" required></div>
+      <div class="booking-field"><label for="current_password">كلمة المرور الحالية</label><input id="current_password" name="current_password" type="password" autocomplete="current-password" required></div>
+      <div class="booking-field"><label for="new_password">كلمة المرور الجديدة</label><input id="new_password" name="new_password" type="password" autocomplete="new-password" minlength="6"><span class="field-help">اتركها فارغة إذا أردت تغيير اسم المستخدم فقط.</span></div>
+      <div class="booking-field"><label for="confirm_password">تأكيد كلمة المرور الجديدة</label><input id="confirm_password" name="confirm_password" type="password" autocomplete="new-password"></div>
+      <button type="submit">حفظ بيانات الحساب</button>
+    </form>
+  </main>
+</body>
+</html>

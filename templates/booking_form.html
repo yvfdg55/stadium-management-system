@@ -13,9 +13,11 @@
       <div>
         <p class="eyebrow">نظام إدارة الملعب</p>
         <h1>{{ 'تعديل الحجز' if booking_id else 'حجز موعد' }}</h1>
-        <p class="muted compact">أدخل تفاصيل الحجز؛ يتم حساب وقت النهاية والإجمالي تلقائيًا.</p>
       </div>
-      <a class="button-link secondary" href="{{ url_for('booking_hours', date=form['booking_date']) }}">العودة لساعات الحجز</a>
+      <a class="button-link secondary" href="{{ url_for('booking_screen', date=form['booking_date']) }}">العودة لساعات الحجز</a>
+      {% if booking_id %}
+        <a class="button-link secondary" href="{{ url_for('booking_payments', booking_id=booking_id) }}">الدفعات</a>
+      {% endif %}
     </header>
 
     {% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
@@ -99,6 +101,13 @@
           <label for="remaining">المتبقي</label>
           <input id="remaining" type="number" value="{{ remaining_preview }}" readonly aria-live="polite">
         </div>
+
+        {% if booking_deposit > 0 %}
+          <div class="booking-field">
+            <label>العربون المحفوظ</label>
+            <input type="number" value="{{ booking_deposit }}" readonly>
+          </div>
+        {% endif %}
 
         <div class="booking-field">
           <label>حالة الدفع</label>
