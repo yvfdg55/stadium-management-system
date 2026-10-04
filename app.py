@@ -481,6 +481,38 @@ def get_finance_summary(start_date, end_date):
     }
 
 
+def get_dashboard_performance(stadium_today, settings):
+    """Build a compact seven-day performance series from the existing reports."""
+    _cycle_start_minutes, window_minutes = work_window(settings)
+    series = []
+    for offset in range(6, -1, -1):
+        day = stadium_today - timedelta(days=offset)
+        day_key = day.isoformat()
+        finance = get_finance_summary(day_key, day_key)
+        summary = get_booking_report_summary(day_key, day_key)
+        series.append({
+            "date": day_key,
+            "label": day.strftime("%d/%m"),
+            "income": finance["total_income"],
+            "booked_hours": summary["booked_hours"],
+            "available_hours": max(0, window_minutes // 60 - summary["booked_hours"]),
+        })
+    max_income = max((item["income"] for item in series), default=0)
+    for item in series:
+        item["bar_percent"] = round(item["income"] / max_income * 100) if max_income else 0
+    today_summary = series[-1]
+    total_hours = today_summary["booked_hours"] + today_summary["available_hours"]
+    occupancy_percent = round(today_summary["booked_hours"] / total_hours * 100) if total_hours else 0
+    return {
+        "series": series,
+        "max_income": max_income,
+        "today_occupancy": occupancy_percent,
+        "today_booked_hours": today_summary["booked_hours"],
+        "today_available_hours": today_summary["available_hours"],
+        "window_hours": window_minutes // 60,
+    }
+
+
 def render_booking_form(booking=None, booking_id=None, form_values=None, error=None, status=200):
     settings = get_app_settings()
     booking_deposit = 0
@@ -769,6 +801,7 @@ def admin_home():
         "expenses": finance_summary["expenses"],
         "net_income": finance_summary["net_income"],
     }
+    dashboard_performance = get_dashboard_performance(today_date, settings)
     return render_template(
         "admin_home.html", username=session.get("admin_username"),
         venue_name=settings["venue_name"],
@@ -776,6 +809,7 @@ def admin_home():
         current_time=datetime.now().strftime("%H:%M"),
         dashboard_finance=get_finance_summary(today, today),
         dashboard_stats=dashboard_stats,
+        dashboard_performance=dashboard_performance,
         current_booking=current_booking,
         upcoming_bookings=upcoming[:5],
     )

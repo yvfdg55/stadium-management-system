@@ -67,6 +67,29 @@
         </article>
       </section>
 
+      <section class="dashboard-insights-grid" aria-label="أداء وإشغال الملعب">
+        <article class="dashboard-panel performance-panel">
+          <div class="premium-section-title">
+            <div><h2>أداء الملعب</h2><p class="muted compact">إجمالي الإيرادات خلال آخر 7 أيام</p></div>
+            <span class="insight-value">{{ '{:,}'.format(dashboard_performance['max_income']) }}</span>
+          </div>
+          <div class="performance-chart" role="img" aria-label="مخطط إيرادات آخر سبعة أيام">
+            {% for day in dashboard_performance['series'] %}
+              <div class="performance-bar-group">
+                <span class="performance-bar-value">{{ '{:,}'.format(day['income']) }}</span>
+                <div class="performance-bar-track"><i style="height: {{ day['bar_percent'] }}%"></i></div>
+                <span class="performance-bar-label">{{ day['label'] }}</span>
+              </div>
+            {% endfor %}
+          </div>
+        </article>
+        <article class="dashboard-panel occupancy-panel">
+          <div class="premium-section-title"><div><h2>إشغال الملعب</h2><p class="muted compact">دورة اليوم الحالية</p></div><span class="insight-value">{{ dashboard_performance['today_occupancy'] }}%</span></div>
+          <div class="occupancy-ring" style="--occupancy: {{ dashboard_performance['today_occupancy'] }}%" role="img" aria-label="نسبة إشغال الملعب {{ dashboard_performance['today_occupancy'] }} بالمئة"><strong>{{ dashboard_performance['today_occupancy'] }}<small>%</small></strong></div>
+          <div class="occupancy-meta"><span><i class="status-dot booked-dot"></i>محجوز <b>{{ dashboard_performance['today_booked_hours'] }} س</b></span><span><i class="status-dot available-dot"></i>متاح <b>{{ dashboard_performance['today_available_hours'] }} س</b></span></div>
+        </article>
+      </section>
+
       <section class="dashboard-finance dashboard-legacy-finance" aria-label="ملخص اليوم المالي">
         <div><span>دخل الحجوزات</span><strong>{{ '{:,}'.format(dashboard_finance['booking_income']) }}</strong></div>
         <div><span>الواردات الأخرى</span><strong>{{ '{:,}'.format(dashboard_finance['other_income']) }}</strong></div>
