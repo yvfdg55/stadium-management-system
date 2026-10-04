@@ -281,12 +281,13 @@ def render_booking_form(booking=None, booking_id=None, form_values=None, error=N
     settings = get_app_settings()
     cycle_start_minutes, window_minutes = work_window(settings)
     window_hours = window_minutes // 60
+    default_booking_date = stadium_business_date(settings=settings).isoformat()
     if form_values is None:
         if booking is not None:
             form_values = dict(booking)
         else:
             form_values = {
-                "booking_date": request.args.get("date", date.today().isoformat()),
+                "booking_date": request.args.get("date", default_booking_date),
                 "start_time": request.args.get("start_time", settings["work_start"]),
                 "client_id": "",
                 "hourly_rate": settings["hourly_rate"],
@@ -297,7 +298,7 @@ def render_booking_form(booking=None, booking_id=None, form_values=None, error=N
 
     values = {
         "client_id": str(form_values.get("client_id", "")),
-        "booking_date": str(form_values.get("booking_date", date.today().isoformat())),
+        "booking_date": str(form_values.get("booking_date", default_booking_date)),
         "start_time": str(form_values.get("start_time", settings["work_start"])),
         "hourly_rate": str(form_values.get("hourly_rate", settings["hourly_rate"])),
         "duration_hours": str(form_values.get("duration_hours", settings["booking_duration"])),
@@ -650,8 +651,8 @@ def admin_reports():
 @app.route("/admin/booking", methods=["GET"])
 @login_required
 def booking_screen():
-    today = date.today()
     settings = get_app_settings()
+    today = stadium_business_date(settings=settings)
     try:
         selected_day = datetime.strptime(
             request.args.get("date", today.isoformat()), "%Y-%m-%d"
