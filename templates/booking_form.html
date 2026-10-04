@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   <link rel="stylesheet" href="{{ url_for('theme_css') }}">
   <script src="{{ url_for('static', filename='js/theme.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/client-picker.js') }}" defer></script>
 </head>
 <body>
   {% include "_admin_nav.html" %}
@@ -43,7 +44,7 @@
             <input id="client_id" name="client_id" type="hidden" value="{{ form['client_id'] }}">
             <div id="client_suggestions" class="client-suggestions" role="listbox" hidden>
               {% for client in clients %}
-                <button type="button" class="client-suggestion" role="option" data-client-id="{{ client['id'] }}" data-client-search="{{ (client['name'] ~ ' ' ~ client['phone'])|lower }}">
+                <button type="button" class="client-suggestion" role="option" data-client-id="{{ client['id'] }}">
                   <strong>{{ client['name'] }}</strong><span>{{ client['phone'] }}</span>
                 </button>
               {% endfor %}
@@ -153,11 +154,6 @@
       const remaining = document.getElementById('remaining');
       const paymentStatus = document.getElementById('payment_status');
       const initialPayment = document.getElementById('initial_payment');
-      const clientPicker = document.querySelector('[data-client-picker]');
-      const clientSearch = document.getElementById('client_search');
-      const clientId = document.getElementById('client_id');
-      const clientSuggestions = document.getElementById('client_suggestions');
-      const clientSuggestionButtons = [...document.querySelectorAll('.client-suggestion')];
       const alreadyPaid = Number(form.dataset.alreadyPaid) || 0;
       const cycleStartMinutes = Number(form.dataset.cycleStart.split(':')[0]) * 60
         + Number(form.dataset.cycleStart.split(':')[1]);
@@ -214,49 +210,6 @@
       if (initialPayment) initialPayment.addEventListener('input', updateCalculatedFields);
       updateCalculatedFields();
 
-      function filterClients() {
-        const query = clientSearch.value.trim().toLocaleLowerCase('ar');
-        let visibleCount = 0;
-        clientSuggestionButtons.forEach((button) => {
-          const matches = !query || button.dataset.clientSearch.includes(query);
-          button.hidden = !matches;
-          if (matches) visibleCount += 1;
-        });
-        clientSuggestions.hidden = visibleCount === 0;
-        clientSearch.setAttribute('aria-expanded', String(visibleCount > 0 && !clientSuggestions.hidden));
-        return visibleCount;
-      }
-      function showClientSuggestions() {
-        const visibleCount = filterClients();
-        clientSuggestions.hidden = visibleCount === 0;
-        clientSearch.setAttribute('aria-expanded', String(!clientSuggestions.hidden));
-      }
-      clientSuggestionButtons.forEach((button) => button.addEventListener('click', () => {
-        clientId.value = button.dataset.clientId;
-        clientSearch.value = `${button.querySelector('strong').textContent} — ${button.querySelector('span').textContent}`;
-        clientSearch.setCustomValidity('');
-        clientSuggestions.hidden = true;
-        clientSearch.setAttribute('aria-expanded', 'false');
-      }));
-      clientSearch.addEventListener('input', () => {
-        clientId.value = '';
-        clientSearch.setCustomValidity('اختر عميلًا من نتائج البحث.');
-        showClientSuggestions();
-      });
-      clientSearch.addEventListener('focus', showClientSuggestions);
-      document.addEventListener('click', (event) => {
-        if (clientPicker && !clientPicker.contains(event.target)) {
-          clientSuggestions.hidden = true;
-          clientSearch.setAttribute('aria-expanded', 'false');
-        }
-      });
-      form.addEventListener('submit', (event) => {
-        if (!clientId.value) {
-          event.preventDefault();
-          clientSearch.setCustomValidity('اختر عميلًا من نتائج البحث.');
-          clientSearch.reportValidity();
-        }
-      });
     })();
   </script>
   <button class="theme-toggle" data-theme-toggle type="button" aria-label="تبديل الوضع" aria-pressed="false"></button>
