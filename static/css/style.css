@@ -352,6 +352,7 @@ button.secondary:hover, .button-link.secondary:hover { background: #dbe5f4; }
 .client-picker > input[type="search"] { padding-inline-end: 2.6rem; background: var(--surface); }
 .client-picker::before { content: "⌕"; position: absolute; z-index: 1; inset-inline-end: .85rem; top: .7rem; color: var(--muted); font-size: 1.15rem; pointer-events: none; }
 .client-suggestions { position: absolute; z-index: 10; inset-inline: 0; top: calc(100% + .3rem); display: grid; max-height: 15rem; overflow-y: auto; padding: .3rem; border: 1px solid var(--line); border-radius: .7rem; background: var(--surface); box-shadow: var(--shadow-hover); }
+.client-suggestions[hidden] { display: none; }
 .client-suggestion { display: flex; align-items: center; justify-content: space-between; gap: .7rem; width: 100%; min-height: 2.8rem; margin: 0; padding: .55rem .7rem; border-radius: .45rem; color: var(--navy); background: transparent; text-align: right; font-size: .85rem; }
 .client-suggestion:hover, .client-suggestion:focus-visible { color: var(--blue-dark); background: var(--primary-soft); outline: none; }
 .client-suggestion span { color: var(--muted); direction: ltr; font-size: .76rem; unicode-bidi: isolate; }
