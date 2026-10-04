@@ -1223,18 +1223,20 @@ def build_booking_slots(selected_day, settings):
 
 
 def build_public_slots(selected_day, settings):
-    """Build a read-only, sanitized schedule with no customer or financial data."""
+    """Build a read-only public schedule, exposing only the occupying customer's name."""
     db = get_db()
     cycle_start_minutes, window_minutes = work_window(settings)
     window_hours = window_minutes // 60
     rows = db.execute(
-        "SELECT start_time, duration_hours, booking_type FROM bookings "
-        "WHERE booking_date = ? AND status = 'active'",
+        "SELECT b.start_time, b.duration_hours, b.booking_type, c.name AS client_name "
+        "FROM bookings AS b JOIN clients AS c ON c.id = b.client_id "
+        "WHERE b.booking_date = ? AND b.status = 'active' ORDER BY b.start_time, b.id",
         (selected_day.isoformat(),),
     ).fetchall()
     recurring_rules = db.execute(
-        "SELECT start_time, duration_hours FROM recurring_booking_rules "
-        "WHERE weekday = ? AND active = 1",
+        "SELECT r.start_time, r.duration_hours, c.name AS client_name "
+        "FROM recurring_booking_rules AS r JOIN clients AS c ON c.id = r.client_id "
+        "WHERE r.weekday = ? AND r.active = 1 ORDER BY r.start_time, r.id",
         (selected_day.weekday(),),
     ).fetchall()
     occupied = []
@@ -1243,12 +1245,14 @@ def build_public_slots(selected_day, settings):
             "start": cycle_offset(row["start_time"], cycle_start_minutes) // 60,
             "duration": row["duration_hours"],
             "state": "fixed" if row["booking_type"] == "recurring" else "booked",
+            "client_name": row["client_name"],
         })
     for row in recurring_rules:
         occupied.append({
             "start": cycle_offset(row["start_time"], cycle_start_minutes) // 60,
             "duration": row["duration_hours"],
             "state": "fixed",
+            "client_name": row["client_name"],
         })
     slots = []
     for slot_offset in range(window_hours):
@@ -1262,10 +1266,15 @@ def build_public_slots(selected_day, settings):
             state = "booked"
         elif any(item["state"] == "fixed" for item in covering):
             state = "fixed"
+        client_names = list(dict.fromkeys(
+            item["client_name"] for item in covering
+            if item["state"] == state and item.get("client_name")
+        ))
         slots.append({
             "start": format_clock(cycle_start_minutes + slot_offset * 60),
             "end": format_clock(cycle_start_minutes + (slot_offset + 1) * 60),
             "state": state,
+            "client_names": client_names,
         })
     return slots
 

@@ -39,9 +39,10 @@
     <section aria-label="ساعات اليوم">
       <div class="public-hours-grid">
         {% for slot in slots %}
-          <div class="public-hour public-hour-{{ slot['state'] }}" aria-label="{{ slot['start'] }} إلى {{ slot['end'] }}، {{ 'فارغة' if slot['state'] == 'empty' else 'محجوزة' if slot['state'] == 'booked' else 'مثبتة' }}">
+          <div class="public-hour public-hour-{{ slot['state'] }}" aria-label="{{ slot['start'] }} إلى {{ slot['end'] }}، {{ 'فارغة' if slot['state'] == 'empty' else 'محجوزة' if slot['state'] == 'booked' else 'مثبتة' }}{% if slot['client_names'] %}، الحاجز: {{ slot['client_names']|join('، ') }}{% endif %}">
             <span>{{ slot['start'] }} - {{ slot['end'] }}</span>
             <strong>{{ 'فارغة' if slot['state'] == 'empty' else 'محجوزة' if slot['state'] == 'booked' else 'مثبتة' }}</strong>
+            {% if slot['client_names'] %}<small class="public-hour-client">الحاجز: {{ slot['client_names']|join('، ') }}</small>{% endif %}
           </div>
         {% else %}
           <p class="empty-state">لا توجد ساعات متاحة للعرض.</p>

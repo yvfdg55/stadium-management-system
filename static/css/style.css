@@ -482,6 +482,7 @@ button.secondary:hover, .button-link.secondary:hover { background: #dbe5f4; }
 .public-hour { display: grid; gap: .35rem; min-height: 4.4rem; align-content: center; padding: .8rem .65rem; border: 1px solid; border-radius: .7rem; text-align: center; }
 .public-hour span { font-weight: 700; direction: ltr; unicode-bidi: isolate; }
 .public-hour strong { font-size: .78rem; }
+.public-hour-client { font-size: .75rem; font-weight: 600; overflow-wrap: anywhere; }
 .public-hour-empty { border-color: #86efac; color: #166534; background: #f0fdf4; }
 .public-hour-booked { border-color: #fca5a5; color: #991b1b; background: #fef2f2; }
 .public-hour-fixed { border-color: #93c5fd; color: #1d4ed8; background: #eff6ff; }
