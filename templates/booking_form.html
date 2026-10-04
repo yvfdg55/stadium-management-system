@@ -40,7 +40,7 @@
           <div class="client-picker" data-client-picker>
             <input id="client_search" type="search" value="{{ (selected_client['name'] ~ ' — ' ~ selected_client['phone']) if selected_client else '' }}" placeholder="اكتب اسم العميل أو رقم الهاتف" autocomplete="off" aria-autocomplete="list" aria-controls="client_suggestions" {% if not clients %}disabled{% endif %}>
             <input id="client_id" name="client_id" type="hidden" value="{{ form['client_id'] }}">
-            <div id="client_suggestions" class="client-suggestions" role="listbox" hidden>
+            <div id="client_suggestions" class="client-suggestions" role="listbox">
               {% for client in clients %}
                 <button type="button" class="client-suggestion" role="option" data-client-id="{{ client['id'] }}" data-client-search="{{ (client['name'] ~ ' ' ~ client['phone'])|lower }}">
                   <strong>{{ client['name'] }}</strong><span>{{ client['phone'] }}</span>
@@ -220,7 +220,7 @@
           button.hidden = !matches;
           if (matches) visibleCount += 1;
         });
-        clientSuggestions.hidden = !query || visibleCount === 0;
+        clientSuggestions.hidden = visibleCount === 0;
       }
       clientSuggestionButtons.forEach((button) => button.addEventListener('click', () => {
         clientId.value = button.dataset.clientId;
