@@ -37,14 +37,18 @@
       <div class="booking-fields">
         <div class="booking-field">
           <label for="client_id">العميل</label>
-          <select id="client_id" name="client_id" required {% if not clients %}disabled{% endif %}>
-            <option value="">اختر العميل</option>
-            {% for client in clients %}
-              <option value="{{ client['id'] }}" {{ 'selected' if form['client_id'] == client['id']|string else '' }}>
-                {{ client['name'] }} — {{ client['phone'] }}
-              </option>
-            {% endfor %}
-          </select>
+          <div class="client-picker" data-client-picker>
+            <input id="client_search" type="search" value="{{ (selected_client['name'] ~ ' — ' ~ selected_client['phone']) if selected_client else '' }}" placeholder="اكتب اسم العميل أو رقم الهاتف" autocomplete="off" aria-autocomplete="list" aria-controls="client_suggestions" {% if not clients %}disabled{% endif %}>
+            <input id="client_id" name="client_id" type="hidden" value="{{ form['client_id'] }}">
+            <div id="client_suggestions" class="client-suggestions" role="listbox" hidden>
+              {% for client in clients %}
+                <button type="button" class="client-suggestion" role="option" data-client-id="{{ client['id'] }}" data-client-search="{{ (client['name'] ~ ' ' ~ client['phone'])|lower }}">
+                  <strong>{{ client['name'] }}</strong><span>{{ client['phone'] }}</span>
+                </button>
+              {% endfor %}
+            </div>
+            <small id="client-search-help" class="field-help">ابدأ بالكتابة للبحث، ثم اختر العميل من النتائج.</small>
+          </div>
         </div>
 
         <div class="booking-field">
@@ -147,6 +151,11 @@
       const remaining = document.getElementById('remaining');
       const paymentStatus = document.getElementById('payment_status');
       const initialPayment = document.getElementById('initial_payment');
+      const clientPicker = document.querySelector('[data-client-picker]');
+      const clientSearch = document.getElementById('client_search');
+      const clientId = document.getElementById('client_id');
+      const clientSuggestions = document.getElementById('client_suggestions');
+      const clientSuggestionButtons = [...document.querySelectorAll('.client-suggestion')];
       const alreadyPaid = Number(form.dataset.alreadyPaid) || 0;
       const cycleStartMinutes = Number(form.dataset.cycleStart.split(':')[0]) * 60
         + Number(form.dataset.cycleStart.split(':')[1]);
@@ -202,6 +211,39 @@
       rate.addEventListener('input', updateCalculatedFields);
       if (initialPayment) initialPayment.addEventListener('input', updateCalculatedFields);
       updateCalculatedFields();
+
+      function filterClients() {
+        const query = clientSearch.value.trim().toLocaleLowerCase('ar');
+        let visibleCount = 0;
+        clientSuggestionButtons.forEach((button) => {
+          const matches = !query || button.dataset.clientSearch.includes(query);
+          button.hidden = !matches;
+          if (matches) visibleCount += 1;
+        });
+        clientSuggestions.hidden = !query || visibleCount === 0;
+      }
+      clientSuggestionButtons.forEach((button) => button.addEventListener('click', () => {
+        clientId.value = button.dataset.clientId;
+        clientSearch.value = `${button.querySelector('strong').textContent} — ${button.querySelector('span').textContent}`;
+        clientSearch.setCustomValidity('');
+        clientSuggestions.hidden = true;
+      }));
+      clientSearch.addEventListener('input', () => {
+        clientId.value = '';
+        clientSearch.setCustomValidity('اختر عميلًا من نتائج البحث.');
+        filterClients();
+      });
+      clientSearch.addEventListener('focus', filterClients);
+      document.addEventListener('click', (event) => {
+        if (clientPicker && !clientPicker.contains(event.target)) clientSuggestions.hidden = true;
+      });
+      form.addEventListener('submit', (event) => {
+        if (!clientId.value) {
+          event.preventDefault();
+          clientSearch.setCustomValidity('اختر عميلًا من نتائج البحث.');
+          clientSearch.reportValidity();
+        }
+      });
     })();
   </script>
   <button class="theme-toggle" data-theme-toggle type="button" aria-label="تبديل الوضع" aria-pressed="false"></button>

@@ -579,6 +579,11 @@ def render_booking_form(booking=None, booking_id=None, form_values=None, error=N
     payment_status_preview = (
         "مدفوع بالكامل" if isinstance(total, int) and paid_preview == total else "عربون"
     )
+    clients = get_booking_clients()
+    selected_client = next(
+        (client for client in clients if str(client["id"]) == values["client_id"]),
+        None,
+    )
 
     return render_template(
         "booking_form.html",
@@ -593,7 +598,8 @@ def render_booking_form(booking=None, booking_id=None, form_values=None, error=N
         start_time_options=start_time_options,
         window_hours=window_hours,
         cycle_start=settings["work_start"],
-        clients=get_booking_clients(),
+        clients=clients,
+        selected_client=selected_client,
         error=error,
         maximum_duration=maximum_duration,
     ), status
