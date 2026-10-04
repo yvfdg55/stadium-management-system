@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>دفعات الحجز | إدارة الملعب</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('theme_css') }}">
+</head>
+<body>
+  <main class="page-shell narrow">
+    <header class="page-header">
+      <div>
+        <p class="eyebrow">نظام إدارة الملعب</p>
+        <h1>دفعات الحجز</h1>
+        <p class="muted compact">{{ booking['client_name'] }} — {{ booking['booking_date'] }}، {{ booking['start_time'] }} - {{ booking['end_time'] }}</p>
+      </div>
+      <a class="button-link secondary" href="{{ url_for('booking_screen', date=booking['booking_date']) }}">العودة للمواعيد</a>
+    </header>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="alert {{ category }}" role="status">{{ message }}</div>
+      {% endfor %}
+    {% endwith %}
+    {% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
+
+    <section class="payment-summary-card" aria-label="ملخص حساب الحجز">
+      <div class="payment-summary-values">
+        <div><span>إجمالي الحجز</span><strong>{{ '{:,}'.format(booking['total']) }}</strong></div>
+        <div><span>المدفوع</span><strong>{{ '{:,}'.format(booking['paid']) }}</strong></div>
+        <div><span>المتبقي</span><strong>{{ '{:,}'.format(booking['remaining']) }}</strong></div>
+      </div>
+      <span class="payment-state {{ 'fully-paid' if booking['payment_status'] == 'مدفوع بالكامل' else 'deposit' }}">{{ booking['payment_status'] }}</span>
+    </section>
+
+    {% if booking['status'] == 'active' and booking['remaining'] > 0 %}
+      <form class="form-card payment-form" method="post">
+        <h2>تسجيل دفعة جديدة</h2>
+        <div class="booking-field">
+          <label for="amount">قيمة الدفعة</label>
+          <input id="amount" name="amount" type="number" min="1" max="{{ booking['remaining'] }}" step="1" value="{{ amount }}" required>
+        </div>
+        <p class="field-help">أقصى مبلغ متاح للتسجيل: {{ '{:,}'.format(booking['remaining']) }}</p>
+        <button type="submit">تسجيل الدفعة</button>
+      </form>
+    {% elif booking['status'] != 'active' %}
+      <div class="empty-state payment-notice"><p>الحجز ملغى؛ يمكن عرض الدفعات السابقة فقط.</p></div>
+    {% else %}
+      <div class="empty-state payment-notice"><p>تم سداد الحجز بالكامل.</p></div>
+    {% endif %}
+
+    <section aria-labelledby="payment-history-title">
+      <div class="section-heading">
+        <h2 id="payment-history-title">سجل الدفعات</h2>
+      </div>
+      <div class="payment-history">
+        {% for payment in payments %}
+          <article class="payment-history-row">
+            <span>{{ payment['paid_at'] }}</span>
+            <strong>{{ '{:,}'.format(payment['amount']) }}</strong>
+          </article>
+        {% else %}
+          <div class="empty-state"><p>لم تُسجل دفعات لهذا الحجز بعد.</p></div>
+        {% endfor %}
+      </div>
+    </section>
+  </main>
+</body>
+</html>

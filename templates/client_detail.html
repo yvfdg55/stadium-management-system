@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>سجل العميل | إدارة الملعب</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('theme_css') }}">
+</head>
+<body>
+  <main class="page-shell">
+    <header class="page-header">
+      <div>
+        <p class="eyebrow">ملف العميل</p>
+        <h1>{{ client['name'] }}</h1>
+        <p class="muted compact">{{ client['phone'] }}{% if client['notes'] %} — {{ client['notes'] }}{% endif %}</p>
+      </div>
+      <div class="client-detail-actions">
+        <a class="button-link secondary" href="{{ url_for('clients_list') }}">العملاء</a>
+        <a class="button-link" href="{{ url_for('client_edit', client_id=client['id']) }}">تعديل العميل</a>
+      </div>
+    </header>
+
+    <p class="field-help client-summary-note">الإجماليات تشمل جميع الحجوزات المسجلة للعميل، بما فيها الحجوزات الملغاة.</p>
+    <section class="client-stat-grid" aria-label="ملخص حجوزات العميل">
+      <div class="client-stat"><span>عدد الحجوزات</span><strong>{{ '{:,}'.format(summary['booking_count']) }}</strong></div>
+      <div class="client-stat"><span>إجمالي قيمة الحجوزات</span><strong>{{ '{:,}'.format(summary['total_amount']) }}</strong></div>
+      <div class="client-stat"><span>إجمالي المدفوع</span><strong>{{ '{:,}'.format(summary['total_paid']) }}</strong></div>
+      <div class="client-stat"><span>إجمالي المتبقي</span><strong>{{ '{:,}'.format(summary['total_remaining']) }}</strong></div>
+    </section>
+
+    <section aria-labelledby="client-bookings-title">
+      <div class="section-heading">
+        <h2 id="client-bookings-title">سجل الحجوزات</h2>
+      </div>
+      <div class="client-booking-list">
+        {% for booking in bookings %}
+          <article class="client-booking-entry">
+            <header class="client-booking-heading">
+              <div>
+                <h3>{{ booking['date_label'] }}</h3>
+                <p>{{ booking['start_time'] }} - {{ booking['end_time'] }}</p>
+              </div>
+              <span class="booking-status {{ 'active-status' if booking['status'] == 'active' else 'cancelled-status' }}">{{ booking['status_label'] }}</span>
+            </header>
+            <div class="client-booking-values">
+              <div><span>إجمالي الحجز</span><strong>{{ '{:,}'.format(booking['total']) }}</strong></div>
+              <div><span>المدفوع</span><strong>{{ '{:,}'.format(booking['paid']) }}</strong></div>
+              <div><span>المتبقي</span><strong>{{ '{:,}'.format(booking['remaining']) }}</strong></div>
+            </div>
+          </article>
+        {% else %}
+          <div class="empty-state"><p>لا توجد حجوزات مسجلة لهذا العميل.</p></div>
+        {% endfor %}
+      </div>
+    </section>
+  </main>
+</body>
+</html>

@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>مواعيد الملعب | إدارة الملعب</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('theme_css') }}">
 </head>
 <body>
   <main class="page-shell">
@@ -12,43 +13,104 @@
       <div>
         <p class="eyebrow">نظام إدارة الملعب</p>
         <h1>مواعيد الملعب</h1>
-        <p class="muted compact">عرض المواعيد فقط — لا يتم إنشاء حجز في هذه المرحلة.</p>
+        <p class="muted compact">اختر أي يوم من التقويم لعرض ساعات العمل، ثم اضغط على ساعة متاحة لإنشاء حجز.</p>
       </div>
       <a class="button-link secondary" href="{{ url_for('admin_home') }}">الرئيسية</a>
     </header>
 
     <section class="schedule-meta" aria-label="إعدادات المواعيد الحالية">
-      <span>سعر الساعة القابل للإعداد: <strong>{{ '{:,}'.format(hourly_rate) }}</strong></span>
+      <span>سعر الساعة الافتراضي: <strong>{{ '{:,}'.format(hourly_rate) }}</strong></span>
+      <span>دورة يوم الملعب: <strong>{{ work_start }} - {{ work_end_label }}</strong> (تنتهي {{ work_end_day }}، {{ work_window_hours }} ساعة)</span>
     </section>
 
-    <section aria-labelledby="days-title">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="alert {{ category }}" role="status">{{ message }}</div>
+      {% endfor %}
+    {% endwith %}
+
+    <section aria-labelledby="calendar-title">
       <div class="section-heading">
-        <h2 id="days-title">الأيام السبعة القادمة</h2>
+        <h2 id="calendar-title">أيام الشهر</h2>
       </div>
-      <nav class="days-strip" aria-label="اختيار اليوم">
-        {% for day in days %}
-          <a class="day-card {{ 'selected' if day['date'] == selected_date else '' }}" href="{{ url_for('booking_screen', date=day['date']) }}">
-            <span class="day-name">{{ day['day_name'] }}</span>
-            <span class="day-date">{{ day['date_label'] }}</span>
-            {% if day['is_today'] %}<span class="today-label">اليوم</span>{% endif %}
-          </a>
-        {% endfor %}
+      <nav class="calendar-month-nav" aria-label="التنقل بين الشهور">
+        <a class="button-link secondary small" href="{{ url_for('booking_screen', date=previous_month) }}">الشهر السابق</a>
+        <span class="calendar-month-label" aria-live="polite">{{ month_label }}</span>
+        <a class="button-link secondary small" href="{{ url_for('booking_screen', date=next_month) }}">الشهر التالي</a>
       </nav>
+      <div class="calendar-grid" role="grid" aria-label="تقويم {{ month_label }}">
+        {% for weekday in weekday_names %}
+          <div class="weekday-heading" role="columnheader">{{ weekday }}</div>
+        {% endfor %}
+        {% for week in calendar_weeks %}
+          {% for day in week %}
+            {% if day %}
+              <a class="calendar-day {{ 'selected' if day['is_selected'] else '' }} {{ 'today' if day['is_today'] else '' }}"
+                 role="gridcell"
+                 href="{{ url_for('booking_screen', date=day['date']) }}"
+                 aria-label="{{ day['date'] }}{% if day['is_today'] %}، اليوم{% endif %}"
+                 {% if day['is_selected'] %}aria-current="date"{% endif %}>
+                <span>{{ day['day_number'] }}</span>
+                {% if day['is_today'] %}<small>اليوم</small>{% endif %}
+              </a>
+            {% else %}
+              <div class="calendar-day empty" role="gridcell" aria-hidden="true"></div>
+            {% endif %}
+          {% endfor %}
+        {% endfor %}
+      </div>
     </section>
 
     <section class="slots-section" aria-labelledby="slots-title">
       <div class="section-heading">
-        <h2 id="slots-title">ساعات العمل</h2>
-        <span class="selected-date">{{ selected_date }}</span>
+        <h2 id="slots-title">ساعات يوم {{ selected_date_label }}</h2>
       </div>
       <div class="slots-list">
         {% for slot in slots %}
-          <div class="slot-card" aria-label="{{ slot['start'] }} - {{ slot['end'] }}">
-            <span>{{ slot['start'] }} - {{ slot['end'] }}</span>
-            <span class="slot-status">متاح للعرض</span>
-          </div>
+          {% if slot['booking'] %}
+            <div class="slot-card booked-slot" aria-label="{{ slot['start'] }} - {{ slot['end'] }}، محجوز">
+              <div class="slot-description">
+                <span>{{ slot['start'] }} - {{ slot['end'] }}</span>
+                <span class="slot-status booked-status">محجوز لـ {{ slot['booking']['client_name'] }}</span>
+              </div>
+              <a class="button-link secondary small" href="{{ url_for('booking_edit', booking_id=slot['booking']['id']) }}">تعديل</a>
+            </div>
+          {% else %}
+            <a class="slot-card slot-available" aria-label="حجز الساعة {{ slot['start'] }} - {{ slot['end'] }}"
+               href="{{ url_for('booking_new', date=selected_date, start_time=slot['start']) }}">
+              <span>{{ slot['start'] }} - {{ slot['end'] }}</span>
+              <span class="slot-status">متاحة — اضغط للحجز</span>
+            </a>
+          {% endif %}
         {% else %}
           <div class="empty-state"><p>لا توجد ساعات عمل مضبوطة.</p></div>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section aria-labelledby="payment-summary-title">
+      <div class="section-heading">
+        <h2 id="payment-summary-title">ملخص دفعات حجوزات اليوم</h2>
+      </div>
+      <div class="payment-booking-list">
+        {% for booking in booking_summaries %}
+          <article class="payment-booking-card">
+            <div class="payment-booking-heading">
+              <h3>{{ booking['client_name'] }}</h3>
+              <span>{{ booking['start_time'] }} - {{ booking['end_time'] }}</span>
+            </div>
+            <div class="payment-summary-values">
+              <div><span>إجمالي الحجز</span><strong>{{ '{:,}'.format(booking['total']) }}</strong></div>
+              <div><span>المدفوع</span><strong>{{ '{:,}'.format(booking['paid']) }}</strong></div>
+              <div><span>المتبقي</span><strong>{{ '{:,}'.format(booking['remaining']) }}</strong></div>
+            </div>
+            <div class="payment-booking-footer">
+              <span class="payment-state {{ 'fully-paid' if booking['payment_status'] == 'مدفوع بالكامل' else 'deposit' }}">{{ booking['payment_status'] }}</span>
+              <a class="button-link small" href="{{ url_for('booking_payments', booking_id=booking['id']) }}">إدارة الدفعات</a>
+            </div>
+          </article>
+        {% else %}
+          <div class="empty-state"><p>لا توجد حجوزات مسجلة لهذا اليوم.</p></div>
         {% endfor %}
       </div>
     </section>

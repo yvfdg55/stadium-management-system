@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>التقارير | إدارة الملعب</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('theme_css') }}">
+</head>
+<body>
+  {% macro report_metrics(summary) %}
+    <div class="report-metrics">
+      <div class="report-metric"><span>عدد الحجوزات</span><strong>{{ '{:,}'.format(summary['booking_count']) }}</strong></div>
+      <div class="report-metric"><span>إجمالي قيمة الحجوزات</span><strong>{{ '{:,}'.format(summary['total_amount']) }}</strong></div>
+      <div class="report-metric"><span>إجمالي المبالغ المدفوعة</span><strong>{{ '{:,}'.format(summary['total_paid']) }}</strong></div>
+      <div class="report-metric"><span>إجمالي المبالغ المتبقية</span><strong>{{ '{:,}'.format(summary['total_remaining']) }}</strong></div>
+      <div class="report-metric"><span>عدد الساعات المحجوزة</span><strong>{{ '{:,}'.format(summary['booked_hours']) }}</strong></div>
+    </div>
+  {% endmacro %}
+
+  <main class="page-shell">
+    <header class="page-header">
+      <div>
+        <p class="eyebrow">نظام إدارة الملعب</p>
+        <h1>التقارير</h1>
+        <p class="muted compact">ملخص الحجوزات السارية والدفعات المسجلة. الحجوزات الملغاة غير مشمولة.</p>
+      </div>
+      <a class="button-link secondary" href="{{ url_for('admin_home') }}">الرئيسية</a>
+    </header>
+
+    <section class="report-grid" aria-label="التقارير الجاهزة">
+      <article class="report-card">
+        <div class="report-card-heading">
+          <h2>تقرير اليوم</h2>
+          <span>{{ today_label }}</span>
+        </div>
+        {{ report_metrics(today_summary) }}
+      </article>
+
+      <article class="report-card">
+        <div class="report-card-heading">
+          <h2>تقرير الشهر الحالي</h2>
+          <span>{{ month_label }}</span>
+        </div>
+        {{ report_metrics(month_summary) }}
+      </article>
+
+      <article class="report-card">
+        <div class="report-card-heading">
+          <h2>تقرير السنة الحالية</h2>
+          <span>{{ year_label }}</span>
+        </div>
+        {{ report_metrics(year_summary) }}
+      </article>
+    </section>
+
+    <section aria-labelledby="custom-report-title">
+      <div class="section-heading">
+        <h2 id="custom-report-title">تقرير لفترة مخصصة</h2>
+      </div>
+      <form class="form-card custom-report-form" method="get" action="{{ url_for('admin_reports') }}">
+        <div class="booking-fields">
+          <div class="booking-field">
+            <label for="start_date">تاريخ البداية</label>
+            <input id="start_date" name="start_date" type="date" value="{{ custom_start }}" required>
+          </div>
+          <div class="booking-field">
+            <label for="end_date">تاريخ النهاية</label>
+            <input id="end_date" name="end_date" type="date" value="{{ custom_end }}" required>
+          </div>
+        </div>
+        <button type="submit">عرض التقرير</button>
+      </form>
+
+      {% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
+
+      {% if custom_summary %}
+        <article class="report-card custom-report-result">
+          <div class="report-card-heading">
+            <h2>نتيجة الفترة المخصصة</h2>
+            <span>{{ custom_label }}</span>
+          </div>
+          {{ report_metrics(custom_summary) }}
+        </article>
+      {% endif %}
+    </section>
+  </main>
+</body>
+</html>

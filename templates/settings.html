@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>الإعدادات | إدارة الملعب</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('theme_css') }}">
+</head>
+<body>
+  <main class="page-shell narrow">
+    <header class="page-header">
+      <div>
+        <p class="eyebrow">نظام إدارة الملعب</p>
+        <h1>الإعدادات</h1>
+        <p class="muted compact">عدّل بيانات الملعب وإعدادات المواعيد الافتراضية.</p>
+      </div>
+      <a class="button-link secondary" href="{{ url_for('admin_home') }}">الرئيسية</a>
+    </header>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="alert {{ category }}" role="status">{{ message }}</div>
+      {% endfor %}
+    {% endwith %}
+    {% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
+
+    <form class="form-card settings-form" method="post" action="{{ url_for('settings_page') }}">
+      <div class="booking-fields">
+        <div class="booking-field">
+          <label for="venue_name">اسم الملعب</label>
+          <input id="venue_name" name="venue_name" type="text" value="{{ settings['venue_name'] }}" required>
+        </div>
+        <div class="booking-field">
+          <label for="venue_phone">رقم الهاتف</label>
+          <input id="venue_phone" name="venue_phone" type="tel" value="{{ settings['venue_phone'] }}">
+        </div>
+        <div class="booking-field notes-field">
+          <label for="venue_address">العنوان</label>
+          <textarea id="venue_address" name="venue_address" rows="3">{{ settings['venue_address'] }}</textarea>
+        </div>
+        <div class="booking-field">
+          <label for="hourly_rate">سعر الساعة الافتراضي</label>
+          <input id="hourly_rate" name="hourly_rate" type="number" min="0" step="1" value="{{ settings['hourly_rate'] }}" required>
+        </div>
+        <div class="booking-field">
+          <label for="booking_duration">مدة الحجز الافتراضية (بالساعات)</label>
+          <input id="booking_duration" name="booking_duration" type="number" min="1" max="24" step="1" value="{{ settings['booking_duration'] }}" required>
+        </div>
+        <div class="booking-field">
+          <label for="work_start">وقت بداية العمل</label>
+          <input id="work_start" name="work_start" type="time" step="3600" value="{{ settings['work_start'] }}" required>
+        </div>
+        <div class="booking-field">
+          <label for="work_end">وقت نهاية العمل</label>
+          <input id="work_end" name="work_end" type="time" step="3600" value="{{ settings['work_end'] }}" required>
+        </div>
+        <div class="notes-field settings-color-heading">
+          <h2>ألوان الواجهة</h2>
+          <p class="field-help">اختر اللون الأساسي والثانوي وخلفية صفحات التطبيق.</p>
+        </div>
+        <div class="booking-field color-setting">
+          <label for="primary_color">اللون الأساسي (الأزرار والعناصر البارزة)</label>
+          <input id="primary_color" name="primary_color" type="color" value="{{ settings['primary_color'] }}" required>
+        </div>
+        <div class="booking-field color-setting">
+          <label for="secondary_color">اللون الثانوي (تفاعل الأزرار)</label>
+          <input id="secondary_color" name="secondary_color" type="color" value="{{ settings['secondary_color'] }}" required>
+        </div>
+        <div class="booking-field color-setting">
+          <label for="background_color">لون خلفية التطبيق</label>
+          <input id="background_color" name="background_color" type="color" value="{{ settings['background_color'] }}" required>
+        </div>
+      </div>
+      <p class="settings-help">إذا كان وقت النهاية مساويًا للبداية، يكون التشغيل 24 ساعة. وإذا كان وقت النهاية أسبق من البداية، تنتهي دورة التشغيل في اليوم التالي. مثال: 10:00 إلى 10:00 تعني من العاشرة صباحًا حتى العاشرة صباح اليوم التالي.</p>
+      <button type="submit">حفظ الإعدادات</button>
+    </form>
+  </main>
+</body>
+</html>
