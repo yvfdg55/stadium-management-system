@@ -160,28 +160,63 @@ button.secondary:hover, .button-link.secondary:hover { background: #dbe5f4; }
 .calendar-day small { color: var(--blue); font-size: .65rem; }
 .calendar-day.empty { visibility: hidden; border-color: transparent; background: transparent; }
 .days-strip {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
   gap: .6rem;
+  overflow-x: auto;
+  padding: .15rem .1rem .75rem;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
 }
 .day-card {
   display: flex;
   flex-direction: column;
   gap: .3rem;
-  min-height: 5.4rem;
+  flex: 0 0 8.5rem;
+  min-height: 7rem;
   padding: .75rem;
   border: 1px solid var(--line);
   border-radius: .7rem;
   color: var(--navy);
   background: var(--surface);
   text-decoration: none;
+  scroll-snap-align: start;
 }
 .day-card:hover, .day-card.selected { border-color: var(--blue); background: #eff6ff; }
 .day-card.selected { box-shadow: inset 0 0 0 1px var(--blue); }
+.day-card.is-today { border-color: var(--blue); box-shadow: inset 0 0 0 1px var(--blue); }
 .day-name { color: var(--blue); font-size: .9rem; font-weight: 700; }
 .day-date { font-size: .9rem; }
+.day-booking-count { margin-top: auto; color: var(--muted); font-size: .8rem; }
 .today-label { color: var(--muted); font-size: .76rem; }
 .slots-list { display: grid; gap: .6rem; }
+.booking-hours-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .55rem; }
+.hour-card {
+  display: flex;
+  min-width: 0;
+  min-height: 7rem;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: .4rem;
+  padding: .6rem .25rem;
+  border: 1px solid var(--line);
+  border-radius: .75rem;
+  text-align: center;
+  text-decoration: none;
+  box-shadow: 0 1px 2px rgba(18, 32, 51, .04);
+  transition: transform .12s ease, box-shadow .12s ease;
+}
+.hour-card:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(18, 32, 51, .1); }
+.hour-card:focus-visible { outline: 3px solid rgba(37, 99, 235, .35); outline-offset: 2px; }
+.hour-time { direction: ltr; white-space: nowrap; font-size: clamp(.62rem, 2.7vw, .95rem); font-weight: 700; }
+.hour-status { font-size: .82rem; font-weight: 700; }
+.hour-status::before { display: inline-block; width: .55rem; height: .55rem; margin-left: .25rem; border-radius: 50%; background: currentColor; content: ""; vertical-align: .05rem; }
+.hour-client, .hour-phone { max-width: 100%; overflow: hidden; color: inherit; font-size: .73rem; text-overflow: ellipsis; white-space: nowrap; }
+.hour-phone { direction: ltr; unicode-bidi: isolate; }
+.status-available { border-color: #86efac; color: #166534; background: #f0fdf4; }
+.status-booked { border-color: #fda4af; color: #9f1239; background: #fff1f2; }
+.status-deposit { border-color: #fbbf24; color: #92400e; background: #fffbeb; }
+.status-cancelled { border-color: #1e293b; color: #f8fafc; background: #334155; }
 .slot-card {
   display: flex;
   align-items: center;
@@ -333,9 +368,18 @@ button.danger:hover { background: #ffe4e6; }
   .toolbar { grid-template-columns: 1fr auto; align-items: end; }
   .client-card { flex-direction: row; align-items: center; justify-content: space-between; }
   .client-stat-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .days-strip { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+  .days-strip { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); overflow: visible; }
+  .day-card { min-width: 0; }
+  .booking-hours-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: .7rem; }
   .booking-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .booking-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .report-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; }
   .report-metrics { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 360px) {
+  .booking-hours-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hour-card { min-height: 6.5rem; }
+  .booking-hours-header { flex-direction: column; align-items: stretch; gap: .65rem; }
+  .booking-hours-header > .button-link { align-self: flex-start; }
 }

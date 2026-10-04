@@ -653,94 +653,122 @@ def admin_reports():
 def booking_screen():
     settings = get_app_settings()
     today = stadium_business_date(settings=settings)
-    try:
-        selected_day = datetime.strptime(
-            request.args.get("date", today.isoformat()), "%Y-%m-%d"
-        ).date()
-    except ValueError:
-        selected_day = today
-
-    month_start = selected_day.replace(day=1)
-    previous_month = (month_start - timedelta(days=1)).replace(day=1)
-    next_month = (month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
     month_names = [
         "يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو",
         "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر",
     ]
-    weekday_names = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"]
-    calendar_weeks = []
-    for week in calendar.Calendar(firstweekday=6).monthdayscalendar(selected_day.year, selected_day.month):
-        calendar_week = []
-        for day_number in week:
-            if day_number == 0:
-                calendar_week.append(None)
-                continue
-            calendar_day = selected_day.replace(day=day_number)
-            calendar_week.append({
-                "date": calendar_day.isoformat(),
-                "day_number": day_number,
-                "is_selected": calendar_day == selected_day,
-                "is_today": calendar_day == today,
-            })
-        calendar_weeks.append(calendar_week)
-
-    active_bookings = get_db().execute(
+    weekday_names = ["الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد"]
+    end_day = today + timedelta(days=6)
+    count_rows = get_db().execute(
         """
-        SELECT b.*, c.name AS client_name,
-               COALESCE((SELECT SUM(p.amount) FROM booking_payments AS p WHERE p.booking_id = b.id), 0) AS paid
+        SELECT booking_date, COUNT(*) AS booking_count
+        FROM bookings
+        WHERE status = 'active' AND booking_date >= ? AND booking_date <= ?
+        GROUP BY booking_date
+        """,
+        (today.isoformat(), end_day.isoformat()),
+    ).fetchall()
+    booking_counts = {row["booking_date"]: row["booking_count"] for row in count_rows}
+    days = []
+    for offset in range(7):
+        current_day = today + timedelta(days=offset)
+        days.append({
+            "date": current_day.isoformat(),
+            "weekday": weekday_names[current_day.weekday()],
+            "date_label": f"{current_day.day} {month_names[current_day.month - 1]}",
+            "booking_count": booking_counts.get(current_day.isoformat(), 0),
+            "is_today": offset == 0,
+        })
+
+    cycle_start_minutes, window_minutes = work_window(settings)
+    cycle_end_minutes = cycle_start_minutes + window_minutes
+    return render_template(
+        "booking_screen.html",
+        days=days,
+        work_start=settings["work_start"],
+        work_end_label=format_clock(cycle_end_minutes),
+        work_end_day="اليوم التالي" if cycle_end_minutes >= 24 * 60 else "اليوم نفسه",
+        work_window_hours=window_minutes // 60,
+    )
+
+
+@app.route("/admin/booking/hours", methods=["GET"])
+@login_required
+def booking_hours():
+    settings = get_app_settings()
+    default_day = stadium_business_date(settings=settings)
+    try:
+        selected_day = datetime.strptime(
+            request.args.get("date", default_day.isoformat()), "%Y-%m-%d"
+        ).date()
+    except ValueError:
+        flash("اختر تاريخًا صحيحًا لعرض الساعات.", "error")
+        return redirect(url_for("booking_screen"))
+
+    month_names = [
+        "يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو",
+        "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر",
+    ]
+    weekday_names = ["الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد"]
+    booking_rows = get_db().execute(
+        """
+        SELECT b.*, c.name AS client_name, c.phone AS client_phone,
+               COALESCE(SUM(p.amount), 0) AS paid
         FROM bookings AS b
         JOIN clients AS c ON c.id = b.client_id
-        WHERE b.booking_date = ? AND b.status = 'active'
-        ORDER BY b.start_time
+        LEFT JOIN booking_payments AS p ON p.booking_id = b.id
+        WHERE b.booking_date = ?
+        GROUP BY b.id
+        ORDER BY b.id DESC
         """,
         (selected_day.isoformat(),),
     ).fetchall()
     cycle_start_minutes, window_minutes = work_window(settings)
     window_hours = window_minutes // 60
-    booking_summaries = []
-    for row in active_bookings:
+    bookings = []
+    for row in booking_rows:
         booking = dict(row)
         booking["cycle_start_offset"] = cycle_offset(booking["start_time"], cycle_start_minutes) // 60
-        booking["remaining"] = booking["total"] - booking["paid"]
-        booking["payment_status"] = (
-            "مدفوع بالكامل" if booking["paid"] == booking["total"] else "عربون"
-        )
-        booking_summaries.append(booking)
-    booking_summaries.sort(key=lambda item: item["cycle_start_offset"])
-    active_bookings = booking_summaries
+        if booking["status"] == "cancelled":
+            booking["card_state"] = "cancelled"
+            booking["status_label"] = "ملغى"
+        elif booking["paid"] < booking["total"]:
+            booking["card_state"] = "deposit"
+            booking["status_label"] = "عربون"
+        else:
+            booking["card_state"] = "booked"
+            booking["status_label"] = "محجوز"
+        phone = booking["client_phone"] or ""
+        booking["short_phone"] = f"{phone[:3]}…" if len(phone) > 3 else phone
+        bookings.append(booking)
+    bookings.sort(key=lambda item: (item["cycle_start_offset"], -item["id"]))
+
     slots = []
     for slot_offset in range(window_hours):
         slot_start = format_clock(cycle_start_minutes + slot_offset * 60)
         slot_end = format_clock(cycle_start_minutes + (slot_offset + 1) * 60)
-        booking = next(
-            (
-                item for item in active_bookings
-                if item["cycle_start_offset"] < slot_offset + 1
-                and item["cycle_start_offset"] + item["duration_hours"] > slot_offset
-            ),
-            None,
-        )
+        covering = [
+            item for item in bookings
+            if item["cycle_start_offset"] < slot_offset + 1
+            and item["cycle_start_offset"] + item["duration_hours"] > slot_offset
+        ]
+        booking = next((item for item in covering if item["status"] == "active"), None)
+        if booking is None:
+            booking = next((item for item in covering if item["status"] == "cancelled"), None)
         slots.append({"start": slot_start, "end": slot_end, "booking": booking})
 
     cycle_end_minutes = cycle_start_minutes + window_minutes
-    work_end_label = format_clock(cycle_end_minutes)
-    work_end_day = "اليوم التالي" if cycle_end_minutes >= 24 * 60 else "اليوم نفسه"
-
     return render_template(
-        "booking_screen.html",
-        calendar_weeks=calendar_weeks,
-        weekday_names=weekday_names,
-        month_label=f"{month_names[selected_day.month - 1]} {selected_day.year}",
-        previous_month=previous_month.isoformat(),
-        next_month=next_month.isoformat(),
+        "booking_hours.html",
         selected_date=selected_day.isoformat(),
-        selected_date_label=selected_day.strftime("%d/%m/%Y"),
+        selected_day_label=(
+            f"{weekday_names[selected_day.weekday()]}، "
+            f"{selected_day.day} {month_names[selected_day.month - 1]}"
+        ),
         slots=slots,
-        booking_summaries=booking_summaries,
-        hourly_rate=int(settings["hourly_rate"]),
         work_start=settings["work_start"],
-        work_end_label=work_end_label,
-        work_end_day=work_end_day,
+        work_end_label=format_clock(cycle_end_minutes),
+        work_end_day="اليوم التالي" if cycle_end_minutes >= 24 * 60 else "اليوم نفسه",
         work_window_hours=window_hours,
     )
 
@@ -757,7 +785,7 @@ def booking_new():
         status = 409 if isinstance(error, BookingConflict) else 400
         return render_booking_form(form_values=request.form.to_dict(), error=str(error), status=status)
     flash("تم إنشاء الحجز بنجاح.", "success")
-    return redirect(url_for("booking_screen", date=values["booking_date"]))
+    return redirect(url_for("booking_hours", date=values["booking_date"]))
 
 
 @app.route("/admin/bookings/<int:booking_id>/edit", methods=["GET", "POST"])
@@ -787,7 +815,7 @@ def booking_edit(booking_id):
             status=status,
         )
     flash("تم تعديل الحجز بنجاح.", "success")
-    return redirect(url_for("booking_screen", date=values["booking_date"]))
+    return redirect(url_for("booking_hours", date=values["booking_date"]))
 
 
 @app.route("/admin/bookings/<int:booking_id>/cancel", methods=["POST"])
@@ -813,7 +841,7 @@ def booking_cancel(booking_id):
         db.rollback()
         raise
     flash("تم إلغاء الحجز وإتاحة وقته مجددًا.", "success")
-    return redirect(url_for("booking_screen", date=booking["booking_date"]))
+    return redirect(url_for("booking_hours", date=booking["booking_date"]))
 
 
 @app.route("/admin/bookings/<int:booking_id>/payments", methods=["GET", "POST"])

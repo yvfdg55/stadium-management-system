@@ -15,7 +15,7 @@
         <h1>{{ 'تعديل الحجز' if booking_id else 'حجز موعد' }}</h1>
         <p class="muted compact">أدخل تفاصيل الحجز؛ يتم حساب وقت النهاية والإجمالي تلقائيًا.</p>
       </div>
-      <a class="button-link secondary" href="{{ url_for('booking_screen', date=form['booking_date']) }}">العودة للمواعيد</a>
+      <a class="button-link secondary" href="{{ url_for('booking_hours', date=form['booking_date']) }}">العودة لساعات الحجز</a>
     </header>
 
     {% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
