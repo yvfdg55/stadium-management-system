@@ -39,7 +39,8 @@
         {% for client in clients %}
           <article class="client-card">
             <div class="client-main">
-              <h2>{{ client['name'] }}</h2>
+              <span class="client-name-label">اسم العميل</span>
+              <h2 class="client-name">{{ client['name'] }}</h2>
               <p class="phone">{{ client['phone'] }}</p>
               {% if client['notes'] %}<p class="notes">{{ client['notes'] }}</p>{% endif %}
             </div>

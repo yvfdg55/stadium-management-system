@@ -520,6 +520,8 @@ button.secondary:hover, .button-link.secondary:hover { background: #dbe5f4; }
   border-radius: .8rem;
   background: var(--surface);
 }
+.client-name-label { display: block; margin-bottom: .15rem; color: var(--muted); font-size: .78rem; font-weight: 700; }
+.client-card h2.client-name { color: var(--primary); font-size: 1.2rem; font-weight: 800; overflow-wrap: anywhere; }
 .phone, .notes { margin: .45rem 0 0; color: var(--muted); line-height: 1.6; }
 .notes { white-space: pre-wrap; }
 .card-actions { display: flex; gap: .5rem; }
