@@ -516,15 +516,11 @@ button.secondary:hover, .button-link.secondary:hover { background: #e8edd1; }
 .legend-dot { width: .7rem; height: .7rem; border-radius: 50%; }
 .legend-dot.empty { background: #22c55e; }
 .legend-dot.booked { background: #ef4444; }
-.legend-dot.fixed { background: #0789a1; }
-.public-hours-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; }
-.public-hour { display: grid; gap: .35rem; min-height: 4.4rem; align-content: center; padding: .8rem .65rem; border: 1px solid; border-radius: .7rem; text-align: center; }
-.public-hour span { font-weight: 700; direction: ltr; unicode-bidi: isolate; }
-.public-hour strong { font-size: .78rem; }
-.public-hour-client { font-size: .75rem; font-weight: 600; overflow-wrap: anywhere; }
-.public-hour-empty { border-color: #86efac; color: #166534; background: #f0fdf4; }
-.public-hour-booked { border-color: #fca5a5; color: #991b1b; background: #fef2f2; }
-.public-hour-fixed { border-color: #7dd3dc; color: #086779; background: #e7f8f7; }
+.legend-dot.fixed { background: #8b5cf6; }
+.public-hours-grid { margin-top: .15rem; }
+.public-hour { cursor: default; }
+.public-hour:hover { transform: none; box-shadow: 0 1px 2px rgba(18, 32, 51, .04); }
+.public-hour-client { font-size: .72rem; font-weight: 600; }
 
 .client-list { display: grid; gap: .75rem; }
 .client-detail-actions { display: flex; flex-wrap: wrap; gap: .5rem; }

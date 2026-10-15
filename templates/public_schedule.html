@@ -1,3 +1,4 @@
+{% from "_time_display.html" import time_range -%}
 <!doctype html>
 <html lang="ar" dir="rtl">
 <head>
@@ -54,18 +55,20 @@
     </nav>
 
     <div class="public-legend" aria-label="مفتاح الحالات">
-      <span><i class="legend-dot empty"></i>فارغة</span>
+      <span><i class="legend-dot empty"></i>متاحة</span>
       <span><i class="legend-dot booked"></i>محجوزة</span>
       <span><i class="legend-dot fixed"></i>مثبتة</span>
     </div>
 
     <section aria-label="ساعات اليوم">
-      <div class="public-hours-grid">
+      <div class="booking-hours-grid public-hours-grid">
         {% for slot in slots %}
-          <div class="public-hour public-hour-{{ slot['state'] }}" aria-label="{{ slot['start'] }} إلى {{ slot['end'] }}، {{ 'فارغة' if slot['state'] == 'empty' else 'محجوزة' if slot['state'] == 'booked' else 'مثبتة' }}{% if slot['client_names'] %}، ك : {{ slot['client_names']|join('، ') }}{% endif %}">
-            <span>{{ slot['start'] }} - {{ slot['end'] }}</span>
-            <strong>{{ 'فارغة' if slot['state'] == 'empty' else 'محجوزة' if slot['state'] == 'booked' else 'مثبتة' }}</strong>
-            {% if slot['client_names'] %}<small class="public-hour-client">ك : {{ slot['client_names']|join('، ') }}</small>{% endif %}
+          {% set state_label = 'متاحة' if slot['state'] == 'empty' else 'محجوزة' if slot['state'] == 'booked' else 'مثبتة' %}
+          {% set state_class = 'available' if slot['state'] == 'empty' else 'booked' if slot['state'] == 'booked' else 'recurring' %}
+          <div class="hour-card public-hour status-{{ state_class }}" aria-label="{{ slot['start'] }} إلى {{ slot['end'] }}، {{ state_label }}{% if slot['client_names'] %}، ك : {{ slot['client_names']|join('، ') }}{% endif %}">
+            <span class="hour-time">{{ time_range(slot['start'], slot['end']) }}</span>
+            <span class="hour-status">{{ state_label }}</span>
+            {% if slot['client_names'] %}<span class="hour-client public-hour-client">ك : {{ slot['client_names']|join('، ') }}</span>{% endif %}
           </div>
         {% else %}
           <p class="empty-state">لا توجد ساعات متاحة للعرض.</p>
