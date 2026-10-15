@@ -1,9 +1,10 @@
-const CACHE_NAME = 'happy-family-resort-static-v3';
+const CACHE_NAME = 'happy-family-resort-static-v4';
 const PRECACHE_URLS = [
   '/static/css/style.css',
   '/static/js/theme.js',
   '/static/js/pwa.js',
   '/static/manifest.webmanifest',
+  '/static/customer-manifest.webmanifest',
   '/static/icons/icon-192.png',
   '/static/icons/icon-512.png',
   '/static/icons/icon-maskable-512.png'
