@@ -76,7 +76,7 @@
       <div class="payment-history">
         {% for payment in payments %}
           <article class="payment-history-row">
-            <span>{{ payment['paid_at'] }}</span>
+            <span>{{ payment['paid_at_local'] }}</span>
             <strong>{{ '{:,}'.format(payment['amount']) }}</strong>
           </article>
         {% else %}

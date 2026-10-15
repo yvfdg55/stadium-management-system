@@ -160,6 +160,17 @@ def format_arabic_time(value):
     return f"{hour}:{parsed.minute:02d} {period}"
 
 
+def format_local_timestamp(value):
+    """Convert SQLite's UTC timestamp into the configured fixed app timezone."""
+    if not value:
+        return ""
+    try:
+        parsed = datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+    except (TypeError, ValueError):
+        return value
+    return parsed.replace(tzinfo=timezone.utc).astimezone(APP_TIMEZONE).strftime("%Y-%m-%d %H:%M")
+
+
 app.jinja_env.filters["arabic_time"] = format_arabic_time
 
 
@@ -171,6 +182,25 @@ def work_window(settings=None):
     if duration_minutes == 0:
         duration_minutes = 24 * 60
     return start_minutes, duration_minutes
+
+
+def has_schedule_outside_work_window(db, start_minutes, window_minutes):
+    """Whether an active booking or rule would be hidden by this work window."""
+    bookings = db.execute(
+        "SELECT start_time, duration_hours FROM bookings WHERE status = 'active'"
+    ).fetchall()
+    rules = db.execute(
+        "SELECT start_time, duration_hours FROM recurring_booking_rules WHERE active = 1"
+    ).fetchall()
+    for item in [*bookings, *rules]:
+        try:
+            offset = cycle_offset(item["start_time"], start_minutes)
+            duration = int(item["duration_hours"])
+        except (TypeError, ValueError):
+            return True
+        if offset >= window_minutes or duration < 1 or duration > (window_minutes - offset) // 60:
+            return True
+    return False
 
 
 def cycle_offset(value, cycle_start_minutes):
@@ -545,6 +575,10 @@ def get_payment_page(booking_id, error=None, amount="", status=200):
         "WHERE booking_id = ? ORDER BY paid_at DESC, id DESC",
         (booking_id,),
     ).fetchall()
+    payments = [
+        {**dict(payment), "paid_at_local": format_local_timestamp(payment["paid_at"])}
+        for payment in payments
+    ]
     return render_template(
         "booking_payments.html",
         booking=booking,
@@ -555,7 +589,6 @@ def get_payment_page(booking_id, error=None, amount="", status=200):
 
 
 def get_booking_report_summary(start_date, end_date):
-    work_start = get_app_settings()["work_start"]
     row = get_db().execute(
         """
         SELECT COUNT(*) AS booking_count,
@@ -570,26 +603,35 @@ def get_booking_report_summary(start_date, end_date):
             GROUP BY booking_id
         ) AS p ON p.booking_id = b.id
         WHERE b.status = 'active'
-          AND CASE WHEN b.start_time < ?
-                   THEN date(b.booking_date, '-1 day')
-                   ELSE b.booking_date END >= ?
-          AND CASE WHEN b.start_time < ?
-                   THEN date(b.booking_date, '-1 day')
-                   ELSE b.booking_date END <= ?
+          AND b.booking_date >= ?
+          AND b.booking_date <= ?
         """,
-        (work_start, start_date, work_start, end_date),
+        (start_date, end_date),
     ).fetchone()
     summary = dict(row)
+    offset_hours = int(APP_TIMEZONE.utcoffset(None).total_seconds() // 3600)
+    local_time_modifier = f"{offset_hours:+d} hours"
     deposit = get_db().execute(
         """
-        SELECT COALESCE(SUM(CASE WHEN transaction_type = 'collect' THEN amount ELSE 0 END), 0) AS deposit_collected,
-               COALESCE(SUM(CASE WHEN transaction_type = 'refund' THEN amount ELSE 0 END), 0) AS deposit_refunded
-        FROM recurring_deposit_transactions
-        WHERE date(created_at) >= ? AND date(created_at) <= ?
-        """, (start_date, end_date)
+        WITH local_transactions AS (
+            SELECT transaction_type, amount,
+                   date(datetime(created_at, ?)) AS local_date
+            FROM recurring_deposit_transactions
+        )
+        SELECT COALESCE(SUM(CASE WHEN transaction_type = 'collect'
+                                      AND local_date >= ? AND local_date <= ?
+                                 THEN amount ELSE 0 END), 0) AS deposit_collected,
+               COALESCE(SUM(CASE WHEN transaction_type = 'refund'
+                                      AND local_date >= ? AND local_date <= ?
+                                 THEN amount ELSE 0 END), 0) AS deposit_refunded,
+               COALESCE(SUM(CASE WHEN transaction_type = 'collect' AND local_date <= ?
+                                 THEN amount
+                                 WHEN transaction_type = 'refund' AND local_date <= ?
+                                 THEN -amount ELSE 0 END), 0) AS deposit_held
+        FROM local_transactions
+        """, (local_time_modifier, start_date, end_date, start_date, end_date, end_date, end_date)
     ).fetchone()
     summary.update(dict(deposit))
-    summary["deposit_held"] = summary["deposit_collected"] - summary["deposit_refunded"]
     return summary
 
 
@@ -1119,6 +1161,13 @@ def settings_page():
         window_minutes = (end_minutes - start_minutes) % (24 * 60) or 24 * 60
         if booking_duration > window_minutes // 60:
             raise ValueError("مدة الحجز الافتراضية لا يمكن أن تتجاوز ساعات التشغيل.")
+        current_settings = get_app_settings()
+        work_window_changed = (
+            start_time.strftime("%H:%M") != current_settings["work_start"]
+            or end_time.strftime("%H:%M") != current_settings["work_end"]
+        )
+        if work_window_changed and has_schedule_outside_work_window(get_db(), start_minutes, window_minutes):
+            raise ValueError("لا يمكن تغيير ساعات التشغيل لأن حجزًا نشطًا أو قاعدة أسبوعية ستصبح خارج ساعات العمل الجديدة. عدّل المواعيد أو أوقف القاعدة أولًا.")
         values["hourly_rate"] = str(hourly_rate)
         values["booking_duration"] = str(booking_duration)
         values["work_start"] = start_time.strftime("%H:%M")
@@ -1776,7 +1825,7 @@ def recurring_booking_new(rule_id=None):
             today_iso = stadium_business_date(settings=settings).isoformat()
             if pattern_changed:
                 db.execute(
-                    "UPDATE bookings SET booking_type = 'single' "
+                    "UPDATE bookings SET weekly_rule_id = NULL, booking_type = 'single' "
                     "WHERE weekly_rule_id = ? AND status = 'active' AND booking_date = ?",
                     (rule_id, today_iso),
                 )

@@ -18,9 +18,9 @@
       <div class="report-metric"><span>إجمالي المبالغ المدفوعة</span><strong>{{ '{:,}'.format(summary['total_paid']) }}</strong></div>
       <div class="report-metric"><span>إجمالي المبالغ المتبقية</span><strong>{{ '{:,}'.format(summary['total_remaining']) }}</strong></div>
       <div class="report-metric"><span>عدد الساعات المحجوزة</span><strong>{{ '{:,}'.format(summary['booked_hours']) }}</strong></div>
-      <div class="report-metric"><span>العربون المحصل</span><strong>{{ '{:,}'.format(summary['deposit_collected']) }}</strong></div>
-      <div class="report-metric"><span>العربون المسترد</span><strong>{{ '{:,}'.format(summary['deposit_refunded']) }}</strong></div>
-      <div class="report-metric"><span>العربون المحتفظ به</span><strong>{{ '{:,}'.format(summary['deposit_held']) }}</strong></div>
+      <div class="report-metric"><span>العربون المحصل خلال الفترة</span><strong>{{ '{:,}'.format(summary['deposit_collected']) }}</strong></div>
+      <div class="report-metric"><span>العربون المسترد خلال الفترة</span><strong>{{ '{:,}'.format(summary['deposit_refunded']) }}</strong></div>
+      <div class="report-metric"><span>رصيد العربون المحتفظ به حتى نهاية الفترة</span><strong>{{ '{:,}'.format(summary['deposit_held']) }}</strong></div>
     </div>
   {% endmacro %}
   {% macro finance_metrics(finance) %}
