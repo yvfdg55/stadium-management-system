@@ -1213,6 +1213,67 @@ def service_worker():
     return response
 
 
+def get_weekly_booking_report(start_date, end_date, client_filter=""):
+    """Return active weekly-linked occurrences in a date range, optionally by client."""
+    where = [
+        "b.status = 'active'",
+        "b.weekly_rule_id IS NOT NULL",
+        "b.booking_date >= ?",
+        "b.booking_date <= ?",
+    ]
+    params = [start_date, end_date]
+    if client_filter:
+        where.append("c.name LIKE ?")
+        params.append(f"%{client_filter}%")
+    where_sql = " AND ".join(where)
+    db = get_db()
+    joined_tables = """
+        FROM bookings AS b
+        JOIN clients AS c ON c.id = b.client_id
+        JOIN recurring_booking_rules AS r ON r.id = b.weekly_rule_id
+        LEFT JOIN (
+            SELECT booking_id, SUM(amount) AS paid
+            FROM booking_payments
+            GROUP BY booking_id
+        ) AS p ON p.booking_id = b.id
+    """
+    summary = db.execute(
+        f"""
+        SELECT COUNT(*) AS occurrence_count,
+               COALESCE(SUM(b.total), 0) AS total_amount,
+               COALESCE(SUM(COALESCE(p.paid, 0)), 0) AS total_paid,
+               COALESCE(SUM(b.total - COALESCE(p.paid, 0)), 0) AS total_remaining
+        {joined_tables}
+        WHERE {where_sql}
+        """,
+        params,
+    ).fetchone()
+    rows = db.execute(
+        f"""
+        SELECT b.id, b.booking_date, b.start_time, b.end_time, b.booking_type,
+               b.duration_hours, b.total, COALESCE(p.paid, 0) AS paid,
+               c.name AS client_name, r.weekday, r.active AS rule_active
+        {joined_tables}
+        WHERE {where_sql}
+        ORDER BY b.booking_date DESC, b.start_time ASC, b.id DESC
+        LIMIT 500
+        """,
+        params,
+    ).fetchall()
+    weekday_names = ["الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد"]
+    occurrences = []
+    for row in rows:
+        item = dict(row)
+        item["remaining"] = item["total"] - item["paid"]
+        item["weekday_name"] = weekday_names[item["weekday"]]
+        item["rule_status"] = "نشطة" if item["rule_active"] else "موقوفة"
+        occurrences.append(item)
+    result = dict(summary)
+    result["occurrences"] = occurrences
+    result["truncated"] = result["occurrence_count"] > len(occurrences)
+    return result
+
+
 @app.route("/admin/reports", methods=["GET"])
 @login_required
 def admin_reports():
@@ -1250,6 +1311,37 @@ def admin_reports():
             except ValueError:
                 error = "أدخل تاريخًا صحيحًا للبداية والنهاية."
 
+    weekly_start_input = request.args.get("weekly_start", "").strip()
+    weekly_end_input = request.args.get("weekly_end", "").strip()
+    weekly_start = weekly_start_input or month_start.isoformat()
+    weekly_end = weekly_end_input or stadium_today.isoformat()
+    weekly_client = request.args.get("weekly_client", "").strip()[:100]
+    weekly_error = None
+    weekly_report = {
+        "occurrence_count": 0,
+        "total_amount": 0,
+        "total_paid": 0,
+        "total_remaining": 0,
+        "occurrences": [],
+        "truncated": False,
+    }
+    if weekly_start_input or weekly_end_input:
+        if not weekly_start_input or not weekly_end_input:
+            weekly_error = "اختر تاريخ بداية ونهاية لكشف الحجوزات الأسبوعية."
+        else:
+            try:
+                weekly_start_day = datetime.strptime(weekly_start, "%Y-%m-%d").date()
+                weekly_end_day = datetime.strptime(weekly_end, "%Y-%m-%d").date()
+                if weekly_start_day > weekly_end_day:
+                    weekly_error = "تاريخ بداية كشف الحجوزات الأسبوعية يجب ألا يتجاوز تاريخ النهاية."
+                else:
+                    weekly_start = weekly_start_day.isoformat()
+                    weekly_end = weekly_end_day.isoformat()
+            except ValueError:
+                weekly_error = "أدخل تاريخًا صحيحًا لكشف الحجوزات الأسبوعية."
+    if not weekly_error:
+        weekly_report = get_weekly_booking_report(weekly_start, weekly_end, weekly_client)
+
     return render_template(
         "reports.html",
         today_label=f"{stadium_today.strftime('%d/%m/%Y')} · {cycle_description}",
@@ -1272,8 +1364,13 @@ def admin_reports():
         custom_label=custom_label,
         custom_start=custom_start or month_start.isoformat(),
         custom_end=custom_end or stadium_today.isoformat(),
+        weekly_start=weekly_start,
+        weekly_end=weekly_end,
+        weekly_client=weekly_client,
+        weekly_report=weekly_report,
+        weekly_error=weekly_error,
         error=error,
-    ), 400 if error else 200
+    ), 400 if error or weekly_error else 200
 
 
 def build_booking_slots(selected_day, settings):

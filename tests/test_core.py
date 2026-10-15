@@ -115,7 +115,7 @@ def test_session_version_revokes_stale_session(client):
 def test_manifests_worker_and_icons_are_available(client):
     worker = client.get("/service-worker.js")
     assert worker.status_code == 200 and worker.headers["Service-Worker-Allowed"] == "/"
-    assert "static-v10" in worker.get_data(as_text=True)
+    assert "static-v11" in worker.get_data(as_text=True)
     for path in ["/static/manifest.webmanifest", "/static/customer-manifest.webmanifest"]:
         response = client.get(path)
         assert response.status_code == 200 and "Happy Family Resort" in response.get_data(as_text=True)

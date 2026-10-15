@@ -116,3 +116,64 @@ def test_missing_financial_records_are_handled(client):
     login_as_admin(client)
     for path in ["/admin/expenses/9999/edit","/admin/income/9999/edit"]: assert client.get(path).status_code==302
     for path in ["/admin/expenses/9999/delete","/admin/income/9999/delete"]: assert post_form(client,path).status_code==302
+
+
+def test_weekly_report_filters_by_customer_and_sums_occurrences(client,monkeypatch):
+    monkeypatch.setattr(stadium,"app_now",lambda:datetime(2025,1,6,12,0)); login_as_admin(client)
+    customer_a=add_client(name="أحمد العلي",phone="0791000001")
+    customer_b=add_client(name="ليلى الخطيب",phone="0791000002")
+    post_form(client,"/admin/recurring-bookings/new",recurring_payload(customer_a,hourly_rate=100,start_time="14:00"))
+    post_form(client,"/admin/recurring-bookings/new",recurring_payload(customer_b,hourly_rate=50,start_time="16:00"))
+    rule_a=db_query("SELECT id FROM recurring_booking_rules WHERE client_id=?",(customer_a,))[0]["id"]
+    jan6=db_query("SELECT id FROM bookings WHERE weekly_rule_id=? AND booking_date='2025-01-06'",(rule_a,))[0]["id"]
+    with stadium.app.app_context():
+        db=stadium.get_db(); db.execute("INSERT INTO booking_payments (booking_id,amount) VALUES (?,30)",(jan6,)); db.commit()
+        report=stadium.get_weekly_booking_report("2025-01-01","2025-01-31","أحمد")
+    assert report["occurrence_count"]==4
+    assert (report["total_amount"],report["total_paid"],report["total_remaining"])==(400,30,370)
+    assert all(item["client_name"]=="أحمد العلي" for item in report["occurrences"])
+    assert report["occurrences"][0]["weekday_name"]=="الاثنين"
+    page=client.get("/admin/reports?weekly_start=2025-01-01&weekly_end=2025-01-31&weekly_client=%D8%A3%D8%AD%D9%85%D8%AF")
+    body=page.get_data(as_text=True)
+    assert page.status_code==200 and "أحمد العلي" in body and "ليلى الخطيب" not in body
+    assert 'name="weekly_client"' in body and 'value="أحمد"' in body
+
+
+def test_weekly_report_includes_stopped_rule_occurrences_but_marks_rule_stopped(client,monkeypatch):
+    monkeypatch.setattr(stadium,"app_now",lambda:datetime(2025,1,6,12,0)); login_as_admin(client)
+    customer=add_client(name="سلسلة متوقفة")
+    post_form(client,"/admin/recurring-bookings/new",recurring_payload(customer))
+    rule_id=db_query("SELECT id FROM recurring_booking_rules")[0]["id"]
+    assert post_form(client,f"/admin/recurring-bookings/{rule_id}/stop").status_code==302
+    report=stadium.app.test_request_context()
+    with report:
+        data=stadium.get_weekly_booking_report("2025-01-13","2025-01-13")
+    assert data["occurrence_count"]==1 and data["occurrences"][0]["rule_status"]=="موقوفة"
+    body=client.get("/admin/reports?weekly_start=2025-01-13&weekly_end=2025-01-13&weekly_client=سلسلة").get_data(as_text=True)
+    assert "قاعدة موقوفة" in body and "2025-01-13" in body
+
+
+def test_weekly_report_rejects_invalid_or_incomplete_dates(client):
+    login_as_admin(client)
+    for url in [
+        "/admin/reports?weekly_start=2025-01-01",
+        "/admin/reports?weekly_start=bad&weekly_end=2025-01-31",
+        "/admin/reports?weekly_start=2025-02-01&weekly_end=2025-01-01",
+    ]:
+        response=client.get(url)
+        assert response.status_code==400 and "كشف الحجوزات الأسبوعية" in response.get_data(as_text=True)
+
+
+def test_weekly_report_excludes_single_and_cancelled_bookings_and_escapes_query(client,monkeypatch):
+    monkeypatch.setattr(stadium,"app_now",lambda:datetime(2025,1,6,12,0)); login_as_admin(client)
+    customer=add_client(name="سلسلة عميلة")
+    post_form(client,"/admin/recurring-bookings/new",recurring_payload(customer))
+    rule_id=db_query("SELECT id FROM recurring_booking_rules")[0]["id"]
+    recurring_id=db_query("SELECT id FROM bookings WHERE weekly_rule_id=? AND booking_date='2025-01-13'",(rule_id,))[0]["id"]
+    post_form(client,"/admin/bookings/new",booking_payload(customer,booking_date="2025-01-13",start_time="17:00"))
+    with stadium.app.app_context():
+        db=stadium.get_db(); db.execute("UPDATE bookings SET status='cancelled' WHERE id=?",(recurring_id,)); db.commit()
+        filtered=stadium.get_weekly_booking_report("2025-01-13","2025-01-13","سلسلة")
+        injected=stadium.get_weekly_booking_report("2025-01-13","2025-01-13", "' OR 1=1 --")
+    assert filtered["occurrence_count"]==0 and filtered["occurrences"]==[]
+    assert injected["occurrence_count"]==0
