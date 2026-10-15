@@ -325,7 +325,12 @@ button.secondary:hover, .button-link.secondary:hover { background: #e8edd1; }
 }
 .hour-card:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(18, 32, 51, .1); }
 .hour-card:focus-visible { outline: 3px solid rgba(37, 99, 235, .35); outline-offset: 2px; }
-.hour-time { direction: ltr; white-space: nowrap; font-size: clamp(.62rem, 2.7vw, .95rem); font-weight: 700; }
+.hour-time { display: flex; justify-content: center; direction: ltr; white-space: nowrap; font-size: clamp(.58rem, 2.5vw, .92rem); font-weight: 700; font-variant-numeric: tabular-nums; }
+.time-range { display: inline-flex; align-items: center; justify-content: center; gap: .28rem; direction: ltr; white-space: nowrap; }
+.time-label { display: inline-flex; align-items: center; gap: .16rem; direction: ltr; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.time-clock { font-weight: 800; }
+.time-period { padding: .03rem .28rem; border: 1px solid var(--line); border-radius: 999px; color: var(--blue-dark); background: var(--surface); font-size: .72em; font-weight: 800; line-height: 1.35; text-decoration: none; }
+.time-range-separator { color: var(--muted); font-size: .85em; font-weight: 400; }
 .hour-status { font-size: .82rem; font-weight: 700; }
 .hour-status::before { display: inline-block; width: .55rem; height: .55rem; margin-left: .25rem; border-radius: 50%; background: currentColor; content: ""; vertical-align: .05rem; }
 .hour-client, .hour-phone { max-width: 100%; overflow: hidden; color: inherit; font-size: .73rem; text-overflow: ellipsis; white-space: nowrap; }
@@ -359,6 +364,7 @@ button.secondary:hover, .button-link.secondary:hover { background: #e8edd1; }
 .booking-field { display: grid; gap: .35rem; }
 .booking-field label { margin: 0; }
 .booking-field input[readonly] { background: #f8fafc; }
+.time-readout { display: flex; align-items: center; min-height: 2.75rem; padding: .6rem .75rem; border: 1px solid var(--line); border-radius: .6rem; color: var(--navy); background: var(--surface); direction: ltr; font-size: .95rem; font-weight: 800; font-variant-numeric: tabular-nums; }
 .client-picker { position: relative; }
 .client-picker > input[type="search"] { padding-inline-end: 2.6rem; background: var(--surface); }
 .client-picker::before { content: "⌕"; position: absolute; z-index: 1; inset-inline-end: .85rem; top: .7rem; color: var(--muted); font-size: 1.15rem; pointer-events: none; }

@@ -63,7 +63,7 @@
           <div class="premium-section-title"><h2>الحجوزات القادمة</h2><a href="{{ url_for('booking_screen') }}">عرض الكل</a></div>
           <div class="upcoming-list">
             {% for booking in upcoming_bookings %}
-              <div class="upcoming-item"><div><strong>{{ booking['start_time'] }} · {{ booking['duration_hours'] }} س</strong><span>{{ booking['client_name'] }}</span></div><b class="payment-mini {{ 'paid' if booking['remaining'] == 0 else 'due' }}">{{ 'مدفوع' if booking['remaining'] == 0 else 'متبقي' }}</b></div>
+              <div class="upcoming-item"><div><strong>{{ booking['start_time']|arabic_time }} · {{ booking['duration_hours'] }} س</strong><span>{{ booking['client_name'] }}</span></div><b class="payment-mini {{ 'paid' if booking['remaining'] == 0 else 'due' }}">{{ 'مدفوع' if booking['remaining'] == 0 else 'متبقي' }}</b></div>
             {% else %}<p class="muted compact">لا توجد حجوزات قادمة.</p>{% endfor %}
           </div>
         </article>

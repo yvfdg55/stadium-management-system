@@ -72,14 +72,14 @@
           <label for="start_time">وقت البداية</label>
           <select id="start_time" name="start_time" required>
             {% for time_value in start_time_options %}
-              <option value="{{ time_value }}" {{ 'selected' if form['start_time'] == time_value else '' }}>{{ time_value }}</option>
+              <option value="{{ time_value }}" {{ 'selected' if form['start_time'] == time_value else '' }}>{{ time_value|arabic_time }}</option>
             {% endfor %}
           </select>
         </div>
 
         <div class="booking-field">
           <label for="end_time">وقت النهاية</label>
-          <input id="end_time" type="time" value="{{ end_time }}" readonly aria-describedby="end-time-help">
+          <output id="end_time" class="time-readout" aria-live="polite" aria-describedby="end-time-help">{{ end_time|arabic_time }}</output>
           <small id="end-time-help" class="field-help">يتحدد حسب وقت البداية وعدد الساعات.</small>
         </div>
 
@@ -169,6 +169,12 @@
         + Number(form.dataset.cycleStart.split(':')[1]);
       const windowHours = Number(form.dataset.windowHours);
 
+      function formatArabicTime(hour, minute) {
+        const displayHour = hour % 12 || 12;
+        const period = hour < 12 ? 'ص' : 'م';
+        return `${displayHour}:${String(minute).padStart(2, '0')} ${period}`;
+      }
+
       function updateCalculatedFields() {
         const startHour = Number(start.value.split(':')[0]);
         const startMinute = Number(start.value.split(':')[1]);
@@ -188,9 +194,9 @@
           const endMinutes = (startMinutes + Number(duration.value) * 60) % 1440;
           const endHour = Math.floor(endMinutes / 60);
           const endMinute = endMinutes % 60;
-          end.value = `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`;
+          end.textContent = formatArabicTime(endHour, endMinute);
         } else {
-          end.value = '';
+          end.textContent = '';
         }
         const hourlyRate = Number(rate.value);
         const bookingTotal = Number.isFinite(hourlyRate) && maxDuration > 0

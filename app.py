@@ -151,10 +151,16 @@ def format_clock(minutes):
 
 
 def format_arabic_time(value):
-    parsed = datetime.strptime(value, "%H:%M")
+    try:
+        parsed = datetime.strptime(value, "%H:%M")
+    except (TypeError, ValueError):
+        return value or ""
     hour = parsed.hour % 12 or 12
-    period = "صباحًا" if parsed.hour < 12 else "مساءً"
+    period = "ص" if parsed.hour < 12 else "م"
     return f"{hour}:{parsed.minute:02d} {period}"
+
+
+app.jinja_env.filters["arabic_time"] = format_arabic_time
 
 
 def work_window(settings=None):
@@ -1679,12 +1685,20 @@ def recurring_booking_new(rule_id=None):
         "deposit": request.form.get("deposit", str(existing_rule["deposit"] if existing_rule else "0")),
         "notes": request.form.get("notes", existing_rule["notes"] if existing_rule else ""),
     }
+    cycle_start_minutes, window_minutes = work_window(settings)
+    start_time_options = [
+        format_clock(cycle_start_minutes + hour * 60)
+        for hour in range(window_minutes // 60)
+    ]
+    if defaults["start_time"] not in start_time_options:
+        start_time_options.insert(0, defaults["start_time"])
 
     def render_form(error=None, status=200):
         return render_template(
             "recurring_booking_form.html",
             clients=get_booking_clients(),
             form=defaults,
+            start_time_options=start_time_options,
             rule_id=rule_id,
             rule_active=bool(existing_rule["active"]) if existing_rule else True,
             rules=get_recurring_booking_rules(),

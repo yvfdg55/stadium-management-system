@@ -56,7 +56,7 @@
             <header class="client-booking-heading">
               <div>
                 <h3>{{ booking['date_label'] }}</h3>
-                <p>{{ booking['start_time'] }} - {{ booking['end_time'] }}</p>
+                <p>{{ booking['start_time']|arabic_time }} - {{ booking['end_time']|arabic_time }}</p>
               </div>
               <span class="booking-status {{ 'active-status' if booking['status'] == 'active' else 'cancelled-status' }}">{{ booking['status_label'] }}</span>
             </header>

@@ -1,3 +1,4 @@
+{% from "_time_display.html" import time_label -%}
 <!doctype html>
 <html lang="ar" dir="rtl">
 <head>
@@ -51,7 +52,11 @@
         </div>
         <div class="booking-field">
           <label for="start_time">وقت البداية</label>
-          <input id="start_time" name="start_time" type="time" step="3600" value="{{ form['start_time'] }}" required>
+          <select id="start_time" name="start_time" required>
+            {% for time_value in start_time_options %}
+              <option value="{{ time_value }}" {{ 'selected' if form['start_time'] == time_value else '' }}>{{ time_value|arabic_time }}</option>
+            {% endfor %}
+          </select>
         </div>
         <div class="booking-field">
           <label for="duration_hours">عدد الساعات</label>
@@ -87,7 +92,7 @@
           {% for rule in rules %}
             <li class="recurring-rule-item">
               <div class="recurring-rule-details">
-                <strong>{{ rule['client_name'] }} — {{ rule['weekday_name'] }}، {{ rule['start_time'] }}</strong>
+                <strong>{{ rule['client_name'] }} — {{ rule['weekday_name'] }}، {{ time_label(rule['start_time']) }}</strong>
                 <span>{{ rule['duration_hours'] }} ساعة · {{ rule['hourly_rate'] }} لكل ساعة · عربون {{ rule['deposit'] }}</span>
                 <span>{{ 'نشط' if rule['active'] else 'متوقف' }} · {{ rule['generated_count'] }} موعد محجوز مسبقًا</span>
                 {% if rule['conflict_message'] %}

@@ -16,7 +16,7 @@
       <div>
         <p class="eyebrow">نظام إدارة الملعب</p>
         <h1>تفاصيل الحجز</h1>
-        <p class="muted compact">{{ booking['client_name'] }} — {{ booking['booking_date'] }}، {{ booking['start_time'] }} - {{ booking['end_time'] }}</p>
+        <p class="muted compact">{{ booking['client_name'] }} — {{ booking['booking_date'] }}، {{ booking['start_time']|arabic_time }} - {{ booking['end_time']|arabic_time }}</p>
       </div>
       <a class="button-link secondary" href="{{ url_for('booking_screen', date=booking['booking_date']) }}">العودة لساعات الحجز</a>
     </header>
