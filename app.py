@@ -1,4 +1,5 @@
 import calendar
+import hashlib
 import hmac
 import os
 import re
@@ -32,6 +33,7 @@ DEFAULT_SETTINGS = {
     "venue_name": "Happy Family Resort",
     "venue_phone": "",
     "venue_address": "",
+    "venue_policy": "",
     "hourly_rate": str(HOURLY_RATE),
     "work_start": "10:00",
     "work_end": "10:00",
@@ -1039,6 +1041,7 @@ def settings_page():
         "venue_name": request.form.get("venue_name", "").strip(),
         "venue_phone": request.form.get("venue_phone", "").strip(),
         "venue_address": request.form.get("venue_address", "").strip(),
+        "venue_policy": request.form.get("venue_policy", "").strip(),
         "hourly_rate": request.form.get("hourly_rate", "").strip(),
         "work_start": request.form.get("work_start", "").strip(),
         "work_end": request.form.get("work_end", "").strip(),
@@ -1058,6 +1061,8 @@ def settings_page():
     try:
         if not values["venue_name"]:
             raise ValueError("اسم الملعب مطلوب.")
+        if len(values["venue_policy"]) > 8000:
+            raise ValueError("سياسة الملعب طويلة جدًا؛ الحد الأقصى 8000 حرف.")
         if any(not re.fullmatch(r"#[0-9a-fA-F]{6}", values[key])
                for key in ("primary_color", "secondary_color")):
             raise ValueError("اختر ألوانًا صالحة من منتقي الألوان.")
@@ -1300,7 +1305,7 @@ def build_public_slots(selected_day, settings):
     return slots
 
 
-@app.route("/public-schedule", methods=["GET"])
+@app.route("/public-schedule", methods=["GET", "POST"])
 def public_schedule():
     settings = get_app_settings()
     today = stadium_business_date(settings=settings)
@@ -1318,7 +1323,7 @@ def public_schedule():
             "label": f"{current.day} {month_names[current.month - 1]}",
             "is_today": offset == 0,
         })
-    selected_value = request.args.get("date", today.isoformat())
+    selected_value = request.values.get("date", today.isoformat())
     try:
         selected_day = datetime.strptime(selected_value, "%Y-%m-%d").date()
     except ValueError:
@@ -1329,13 +1334,52 @@ def public_schedule():
     selected_date = selected_day.isoformat()
     venue_phone = settings.get("venue_phone", "").strip()
     whatsapp_number = re.sub(r"\D", "", venue_phone)
+    page_context = {
+        "venue_name": settings["venue_name"],
+        "venue_phone": venue_phone,
+        "whatsapp_number": whatsapp_number,
+        "days": days,
+        "selected_date": selected_date,
+    }
+    policy_text = settings.get("venue_policy", "").strip()
+    if not policy_text:
+        session.pop("customer_policy_ack", None)
+        return render_template(
+            "public_schedule.html",
+            policy_state="unconfigured",
+            policy_text="",
+            policy_error=None,
+            **page_context,
+        )
+
+    policy_version = hashlib.sha256(policy_text.encode("utf-8")).hexdigest()
+    if request.method == "POST":
+        if request.form.get("accept_policy") != "yes":
+            return render_template(
+                "public_schedule.html",
+                policy_state="consent",
+                policy_text=policy_text,
+                policy_error="يرجى الإقرار بقراءة سياسة الملعب والموافقة عليها للمتابعة.",
+                **page_context,
+            ), 400
+        session["customer_policy_ack"] = policy_version
+        return redirect(url_for("public_schedule", date=selected_date))
+
+    if session.get("customer_policy_ack") != policy_version:
+        return render_template(
+            "public_schedule.html",
+            policy_state="consent",
+            policy_text=policy_text,
+            policy_error=None,
+            **page_context,
+        )
+
     return render_template(
         "public_schedule.html",
-        venue_name=settings["venue_name"],
-        venue_phone=venue_phone,
-        whatsapp_number=whatsapp_number,
-        days=days,
-        selected_date=selected_date,
+        policy_state="schedule",
+        policy_text=policy_text,
+        policy_error=None,
+        **page_context,
         slots=build_public_slots(selected_day, settings),
     )
 
