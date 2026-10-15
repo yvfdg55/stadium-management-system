@@ -22,16 +22,18 @@
   --shadow-hover: 0 .8rem 2rem rgba(18, 32, 51, .1);
 }
 
-[data-theme="dark"] {
+html[data-theme="dark"] {
   color-scheme: dark;
-  --navy: #e8f1e3;
-  --primary: #c4df8c;
-  --primary-soft: #2e452f;
-  --surface: #202e25;
-  --surface-muted: #26392b;
-  --muted: #afbfaa;
-  --line: #425441;
-  --bg: #17231b;
+  --blue: #4f9cff;
+  --blue-dark: #75b8ff;
+  --navy: #e7f0ff;
+  --primary: #a9ceff;
+  --primary-soft: #203b5e;
+  --surface: #14243a;
+  --surface-muted: #1a2e47;
+  --muted: #a4b6cc;
+  --line: #334c6a;
+  --bg: #0b1728;
   --danger-bg: #3b202d;
   --danger: #fda4af;
   --shadow-soft: 0 .5rem 1.5rem rgba(0, 0, 0, .18);
@@ -66,9 +68,9 @@ body {
 }
 [data-theme="dark"] input,
 [data-theme="dark"] select,
-[data-theme="dark"] textarea { color: var(--navy); background: #202e25; }
+[data-theme="dark"] textarea { color: var(--navy); background: #152a43; }
 [data-theme="dark"] .button-link.secondary,
-[data-theme="dark"] button.secondary { color: var(--navy); background: #364a36; }
+[data-theme="dark"] button.secondary { color: var(--navy); background: #263c58; }
 [data-theme="dark"] .report-metric,
 [data-theme="dark"] .dashboard-finance > div { background: var(--surface-muted); }
 .theme-toggle { position: fixed; z-index: 20; inset-inline-start: 1rem; bottom: 1rem; width: auto; min-height: 2.5rem; margin: 0; padding: .55rem .8rem; border: 1px solid var(--line); border-radius: 999px; color: var(--navy); background: var(--surface); box-shadow: var(--shadow-soft); font-size: .78rem; }

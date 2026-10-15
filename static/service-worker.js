@@ -1,4 +1,4 @@
-const CACHE_NAME = 'happy-family-resort-static-v1';
+const CACHE_NAME = 'happy-family-resort-static-v2';
 const PRECACHE_URLS = [
   '/static/css/style.css',
   '/static/js/theme.js',
