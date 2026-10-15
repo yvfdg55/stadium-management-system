@@ -7,11 +7,12 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   <link rel="stylesheet" href="{{ url_for('theme_css') }}">
   <script src="{{ url_for('static', filename='js/theme.js') }}" defer></script>
+  {% include '_pwa_head.html' %}
 </head>
 <body>
   <div class="dashboard-layout">
     <aside class="dashboard-sidebar" aria-label="التنقل الرئيسي">
-      <div class="sidebar-brand"><span class="brand-mark" aria-hidden="true">م</span><div><strong>{{ venue_name }}</strong><small>نظام الإدارة</small></div></div>
+      <div class="sidebar-brand"><img class="brand-mark brand-logo" src="{{ url_for('static', filename='icons/icon-192.png') }}" alt=""><div><strong>{{ venue_name }}</strong><small>Happy Family Resort · نظام الإدارة</small></div></div>
       <nav class="sidebar-nav">
         <a class="sidebar-link active" href="{{ url_for('admin_home') }}"><span class="sidebar-icon" aria-hidden="true">⌂</span>الرئيسية</a>
         <p class="sidebar-label">الحجوزات</p>

@@ -29,13 +29,18 @@ if len(SECRET_KEY) < 32 or SECRET_KEY.startswith("replace-"):
     raise RuntimeError("Set SECRET_KEY to a unique random value of at least 32 characters.")
 HOURLY_RATE = int(os.getenv("HOURLY_RATE", "10000"))
 DEFAULT_SETTINGS = {
-    "venue_name": "الملعب",
+    "venue_name": "Happy Family Resort",
     "venue_phone": "",
     "venue_address": "",
     "hourly_rate": str(HOURLY_RATE),
     "work_start": "10:00",
     "work_end": "10:00",
     "booking_duration": "1",
+    "primary_color": "#237447",
+    "secondary_color": "#d64b27",
+}
+LEGACY_BRAND_DEFAULTS = {
+    "venue_name": "الملعب",
     "primary_color": "#2563eb",
     "secondary_color": "#1d4ed8",
 }
@@ -407,6 +412,11 @@ def init_db():
         "INSERT OR IGNORE INTO app_settings (setting_key, setting_value) VALUES (?, ?)",
         tuple(DEFAULT_SETTINGS.items()),
     )
+    for key, legacy_value in LEGACY_BRAND_DEFAULTS.items():
+        db.execute(
+            "UPDATE app_settings SET setting_value = ? WHERE setting_key = ? AND setting_value = ?",
+            (DEFAULT_SETTINGS[key], key, legacy_value),
+        )
     admin = db.execute("SELECT id, password_hash FROM admins LIMIT 1").fetchone()
     if admin is None:
         admin_username = os.getenv("ADMIN_USERNAME", "admin").strip()
@@ -1095,6 +1105,17 @@ def theme_css():
     )
     response = Response(css, mimetype="text/css")
     response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.route("/service-worker.js", methods=["GET"])
+def service_worker():
+    response = Response(
+        (BASE_DIR / "static" / "service-worker.js").read_text(encoding="utf-8"),
+        mimetype="application/javascript",
+    )
+    response.headers["Service-Worker-Allowed"] = "/"
+    response.headers["Cache-Control"] = "no-cache"
     return response
 
 

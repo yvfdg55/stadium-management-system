@@ -7,10 +7,12 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   <link rel="stylesheet" href="{{ url_for('theme_css') }}">
   <script src="{{ url_for('static', filename='js/theme.js') }}" defer></script>
+  {% include '_pwa_head.html' %}
 </head>
 <body>
   <main class="page-shell public-schedule-page">
     <header class="public-schedule-header">
+      <img class="public-brand-logo" src="{{ url_for('static', filename='icons/icon-192.png') }}" alt="شعار Happy Family Resort">
       <p class="eyebrow">{{ venue_name }}</p>
       <h1>مواعيد الملعب</h1>
       {% if venue_phone %}
