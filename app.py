@@ -150,6 +150,13 @@ def format_clock(minutes):
     return f"{minutes // 60:02d}:{minutes % 60:02d}"
 
 
+def format_arabic_time(value):
+    parsed = datetime.strptime(value, "%H:%M")
+    hour = parsed.hour % 12 or 12
+    period = "صباحًا" if parsed.hour < 12 else "مساءً"
+    return f"{hour}:{parsed.minute:02d} {period}"
+
+
 def work_window(settings=None):
     settings = settings or get_app_settings()
     start_minutes = clock_minutes(settings["work_start"])
@@ -1297,8 +1304,8 @@ def build_public_slots(selected_day, settings):
             if item["state"] == state and item.get("client_name")
         ))
         slots.append({
-            "start": format_clock(cycle_start_minutes + slot_offset * 60),
-            "end": format_clock(cycle_start_minutes + (slot_offset + 1) * 60),
+            "start": format_arabic_time(format_clock(cycle_start_minutes + slot_offset * 60)),
+            "end": format_arabic_time(format_clock(cycle_start_minutes + (slot_offset + 1) * 60)),
             "state": state,
             "client_names": client_names,
         })
