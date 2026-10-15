@@ -8,7 +8,7 @@
   const applyTheme = (theme) => {
     const isDark = theme === 'dark';
     root.dataset.theme = isDark ? 'dark' : 'light';
-    if (themeColorMeta) themeColorMeta.content = isDark ? '#0b1728' : '#237447';
+    if (themeColorMeta) themeColorMeta.content = isDark ? '#0b1728' : '#f5dc00';
     document.querySelectorAll('[data-theme-toggle]').forEach((button) => {
       button.textContent = button.classList.contains('header-theme-toggle')
         ? (isDark ? '☀️' : '🌙')

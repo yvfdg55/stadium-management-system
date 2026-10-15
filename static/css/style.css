@@ -153,8 +153,8 @@ body {
 .brand-mark.brand-logo { display: block; padding: 0; border-radius: 50%; background: transparent; object-fit: contain; }
 .auth-card .brand-mark.brand-logo { width: 5.5rem; height: 5.5rem; margin: 0 auto 1rem; }
 .sidebar-brand .brand-mark.brand-logo { width: 2.7rem; height: 2.7rem; }
-.pwa-install-button { position: fixed; z-index: 50; inset-inline-end: 1rem; bottom: 1rem; width: auto; min-height: 2.8rem; margin: 0; padding: .7rem 1rem; border: 1px solid #155b36; border-radius: 999px; color: #fff; background: #237447; box-shadow: 0 .5rem 1.4rem rgba(32, 51, 41, .2); font: inherit; font-size: .85rem; font-weight: 800; cursor: pointer; }
-.pwa-install-button:hover { background: #185637; }
+.pwa-install-button { position: fixed; z-index: 50; inset-inline-end: 1rem; bottom: 1rem; width: auto; min-height: 2.8rem; margin: 0; padding: .7rem 1rem; border: 1px solid #b59c00; border-radius: 999px; color: #203329; background: #f5dc00; box-shadow: 0 .5rem 1.4rem rgba(32, 51, 41, .2); font: inherit; font-size: .85rem; font-weight: 800; cursor: pointer; }
+.pwa-install-button:hover { background: #e8c900; }
 .pwa-install-button:disabled { opacity: .65; cursor: wait; }
 
 .eyebrow {
