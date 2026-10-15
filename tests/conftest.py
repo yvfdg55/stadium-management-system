@@ -14,12 +14,15 @@ os.environ["ADMIN_USERNAME"] = "qa-admin"
 os.environ["ADMIN_PASSWORD"] = "QA-only-password-2026-do-not-reuse"
 os.environ["SESSION_COOKIE_SECURE"] = "false"
 os.environ["APP_UTC_OFFSET_HOURS"] = "3"
+os.environ["APP_ENV"] = "test"
+os.environ["TRUSTED_HOSTS"] = "localhost"
 os.environ["DATABASE_PATH"] = str(
     Path(tempfile.gettempdir()) / f"stadium-qa-bootstrap-{uuid.uuid4().hex}.sqlite3"
 )
 
-import pytest  # noqa: E402
-import app as stadium  # noqa: E402
+import pytest
+
+import app as stadium
 
 flask_app = stadium.app
 

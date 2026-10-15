@@ -1,8 +1,16 @@
 from datetime import date, datetime
 
 import pytest
+from conftest import (
+    add_client,
+    booking_payload,
+    db_query,
+    insert_booking,
+    login_as_admin,
+    post_form,
+)
+
 import app as stadium
-from conftest import add_client, booking_payload, db_query, insert_booking, login_as_admin, post_form
 
 
 def test_booking_form_renders(client):
@@ -37,6 +45,15 @@ def test_initial_payment_cannot_exceed_total(client,payment):
     assert db_query("SELECT * FROM bookings") == []
 
 
+@pytest.mark.parametrize("field", ["hourly_rate", "initial_payment"])
+def test_booking_rejects_financial_values_above_safe_limit(client, field):
+    login_as_admin(client); customer=add_client()
+    payload=booking_payload(customer)
+    payload[field]=str(stadium.MAX_FINANCIAL_AMOUNT + 1)
+    assert post_form(client,"/admin/bookings/new",payload).status_code == 400
+    assert db_query("SELECT * FROM bookings") == []
+
+
 def test_booking_wraps_midnight_and_edit_cannot_reduce_below_paid(client):
     login_as_admin(client); customer=add_client()
     assert post_form(client,"/admin/bookings/new",booking_payload(customer,booking_date="2025-01-09",start_time="23:00",duration_hours=2,initial_payment=80)).status_code == 302
@@ -66,6 +83,14 @@ def test_cancel_missing_or_cancelled_and_payment_routes_are_safe(client):
 def test_payment_rejects_invalid_amount(client,amount):
     login_as_admin(client); customer=add_client(); booking_id=insert_booking(customer)
     assert post_form(client,f"/admin/bookings/{booking_id}/payments",{"amount":amount}).status_code==400
+    assert db_query("SELECT * FROM booking_payments")==[]
+
+
+def test_payment_rejects_extremely_large_amount_without_sqlite_overflow(client):
+    login_as_admin(client); customer=add_client(); booking_id=insert_booking(customer)
+    for amount in (str(stadium.MAX_FINANCIAL_AMOUNT + 1), "9" * 5000):
+        response=post_form(client,f"/admin/bookings/{booking_id}/payments",{"amount":amount})
+        assert response.status_code==400
     assert db_query("SELECT * FROM booking_payments")==[]
 
 

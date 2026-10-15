@@ -1,9 +1,10 @@
-from datetime import datetime, timedelta
 import sqlite3
+from datetime import datetime, timedelta
 
 import pytest
-import app as stadium
 from conftest import db_query, login_as_admin, post_form
+
+import app as stadium
 
 
 @pytest.mark.parametrize("minute", range(1440))

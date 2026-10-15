@@ -1,4 +1,3 @@
-import calendar
 import hashlib
 import hmac
 import os
@@ -6,14 +5,25 @@ import re
 import secrets
 import sqlite3
 import time
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta, timezone
 from functools import wraps
 from pathlib import Path
 
 from dotenv import load_dotenv
-from flask import Flask, Response, abort, flash, g, redirect, render_template, request, session, url_for
-from werkzeug.security import check_password_hash, generate_password_hash
+from flask import (
+    Flask,
+    Response,
+    abort,
+    flash,
+    g,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
 from werkzeug.middleware.proxy_fix import ProxyFix
+from werkzeug.security import check_password_hash, generate_password_hash
 
 BASE_DIR = Path(__file__).resolve().parent
 ENV_PATH = BASE_DIR / ".env"
@@ -28,7 +38,12 @@ DATABASE_PATH = Path(os.getenv("DATABASE_PATH", BASE_DIR / "instance" / "stadium
 SECRET_KEY = os.getenv("SECRET_KEY", "")
 if len(SECRET_KEY) < 32 or SECRET_KEY.startswith("replace-"):
     raise RuntimeError("Set SECRET_KEY to a unique random value of at least 32 characters.")
+MAX_SQLITE_INTEGER = 2**63 - 1
+# Per-value guardrail: generous for venue accounting while protecting SQLite aggregates.
+MAX_FINANCIAL_AMOUNT = 1_000_000_000_000
 HOURLY_RATE = int(os.getenv("HOURLY_RATE", "10000"))
+if not 0 <= HOURLY_RATE <= MAX_FINANCIAL_AMOUNT:
+    raise RuntimeError("HOURLY_RATE must be between 0 and MAX_FINANCIAL_AMOUNT.")
 DEFAULT_SETTINGS = {
     "venue_name": "Happy Family Resort",
     "venue_phone": "",
@@ -48,6 +63,19 @@ LEGACY_BRAND_DEFAULTS = {
 }
 
 app = Flask(__name__)
+def resolve_trusted_hosts(raw_value, environment):
+    hosts = [host.strip() for host in raw_value.split(",") if host.strip()]
+    if environment.strip().lower() in {"prod", "production"} and not hosts:
+        raise RuntimeError("Set TRUSTED_HOSTS to the exact public hostnames before production startup.")
+    if environment.strip().lower() in {"prod", "production"} and any(
+        "*" in host or "://" in host or "/" in host for host in hosts
+    ):
+        raise RuntimeError("TRUSTED_HOSTS must contain exact hostnames, not wildcards or URLs.")
+    return hosts or None
+
+
+APP_ENV = os.getenv("APP_ENV", "development")
+TRUSTED_HOSTS = resolve_trusted_hosts(os.getenv("TRUSTED_HOSTS", ""), APP_ENV)
 app.config.update(
     SECRET_KEY=SECRET_KEY,
     DATABASE=str(DATABASE_PATH),
@@ -56,7 +84,7 @@ app.config.update(
     SESSION_COOKIE_SAMESITE="Lax",
     PERMANENT_SESSION_LIFETIME=timedelta(minutes=30),
     MAX_CONTENT_LENGTH=1024 * 1024,
-    TRUSTED_HOSTS=[host.strip() for host in os.getenv("TRUSTED_HOSTS", "").split(",") if host.strip()] or None,
+    TRUSTED_HOSTS=TRUSTED_HOSTS,
 )
 TRUSTED_PROXY_HOPS = int(os.getenv("TRUSTED_PROXY_HOPS", "0"))
 if TRUSTED_PROXY_HOPS:
@@ -168,7 +196,7 @@ def format_local_timestamp(value):
         parsed = datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
     except (TypeError, ValueError):
         return value
-    return parsed.replace(tzinfo=timezone.utc).astimezone(APP_TIMEZONE).strftime("%Y-%m-%d %H:%M")
+    return parsed.replace(tzinfo=UTC).astimezone(APP_TIMEZONE).strftime("%Y-%m-%d %H:%M")
 
 
 app.jinja_env.filters["arabic_time"] = format_arabic_time
@@ -792,7 +820,7 @@ def parse_booking_form(form):
         hourly_rate = int(form.get("hourly_rate", ""))
         duration_hours = int(form.get("duration_hours", ""))
         initial_payment = int(form.get("initial_payment", "0") or 0)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         raise ValueError("أكمل الحقول المطلوبة واختر تاريخًا ووقتًا صحيحين.")
 
     if client_id < 1:
@@ -806,12 +834,18 @@ def parse_booking_form(form):
         raise ValueError("عدد الساعات يجب أن يكون ساعة واحدة على الأقل.")
     if hourly_rate < 0:
         raise ValueError("سعر الساعة لا يمكن أن يكون سالبًا.")
-    total = hourly_rate * duration_hours
-    if initial_payment < 0 or initial_payment > total:
-        raise ValueError("قيمة العربون لا يمكن أن تكون سالبة أو تتجاوز إجمالي الحجز.")
+    if hourly_rate > MAX_FINANCIAL_AMOUNT:
+        raise ValueError(f"سعر الساعة يتجاوز الحد الأقصى المسموح ({MAX_FINANCIAL_AMOUNT:,}).")
+    if initial_payment > MAX_FINANCIAL_AMOUNT:
+        raise ValueError(f"قيمة الدفعة الأولية تتجاوز الحد الأقصى المسموح ({MAX_FINANCIAL_AMOUNT:,}).")
     maximum_duration = (window_minutes - start_offset) // 60
     if duration_hours > maximum_duration:
         raise ValueError("مدة الحجز تتجاوز نهاية دورة عمل الملعب.")
+    total = hourly_rate * duration_hours
+    if total > MAX_SQLITE_INTEGER:
+        raise ValueError("إجمالي الحجز يتجاوز الحد الذي يمكن تخزينه بأمان.")
+    if initial_payment < 0 or initial_payment > total:
+        raise ValueError("قيمة العربون لا يمكن أن تكون سالبة أو تتجاوز إجمالي الحجز.")
     end_time = format_clock(clock_minutes(start.strftime("%H:%M")) + duration_hours * 60)
 
     return {
@@ -1150,6 +1184,8 @@ def settings_page():
             raise ValueError("اختر ألوانًا صالحة من منتقي الألوان.")
         if hourly_rate < 0:
             raise ValueError("سعر الساعة لا يمكن أن يكون سالبًا.")
+        if hourly_rate > MAX_FINANCIAL_AMOUNT:
+            raise ValueError(f"سعر الساعة يتجاوز الحد الأقصى المسموح ({MAX_FINANCIAL_AMOUNT:,}).")
         if booking_duration < 1 or booking_duration > 24:
             raise ValueError("مدة الحجز الافتراضية يجب أن تكون بين ساعة و24 ساعة.")
         start_time = datetime.strptime(values["work_start"], "%H:%M")
@@ -1627,7 +1663,7 @@ def booking_screen():
     if selected_day not in valid_days:
         selected_day = range_start
 
-    slots, window_hours, cycle_start_minutes = build_booking_slots(selected_day, settings)
+    slots, _window_hours, cycle_start_minutes = build_booking_slots(selected_day, settings)
     cycle_start_minutes, window_minutes = work_window(settings)
     cycle_end_minutes = cycle_start_minutes + window_minutes
     return render_template(
@@ -1737,6 +1773,11 @@ def materialize_recurring_rule(db, rule_id, weeks=52):
     ).fetchone()
     if rule is None:
         return 0
+    if not 0 <= rule["hourly_rate"] <= MAX_FINANCIAL_AMOUNT:
+        raise ValueError("سعر قاعدة الحجز الأسبوعي خارج الحد المسموح؛ صحّح السعر من الإعدادات.")
+    recurring_total = rule["hourly_rate"] * rule["duration_hours"]
+    if recurring_total > MAX_SQLITE_INTEGER:
+        raise ValueError("إجمالي الحجز الأسبوعي يتجاوز الحد الذي يمكن تخزينه بأمان.")
     settings = get_app_settings()
     cycle_start_minutes, window_minutes = work_window(settings)
     start_offset = cycle_offset(rule["start_time"], cycle_start_minutes)
@@ -1776,7 +1817,7 @@ def materialize_recurring_rule(db, rule_id, weeks=52):
             (
                 rule["client_id"], booking_date.isoformat(), rule["start_time"], end_time,
                 rule["hourly_rate"], rule["duration_hours"],
-                rule["hourly_rate"] * rule["duration_hours"], rule["notes"], rule_id,
+                recurring_total, rule["notes"], rule_id,
             ),
         )
         created += 1
@@ -1786,18 +1827,10 @@ def materialize_recurring_rule(db, rule_id, weeks=52):
 def get_recurring_booking_rules(client_filter="", rule_status=""):
     weekday_names = ["الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد"]
     db = get_db()
-    where = []
-    params = []
-    if client_filter:
-        where.append("c.name LIKE ?")
-        params.append(f"%{client_filter}%")
-    if rule_status == "active":
-        where.append("r.active = 1")
-    elif rule_status == "stopped":
-        where.append("r.active = 0")
-    where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+    status_value = {"active": 1, "stopped": 0}.get(rule_status)
+    filter_pattern = "%" + client_filter + "%"
     rows = db.execute(
-        f"""
+        """
         SELECT r.*, c.name AS client_name,
                (SELECT COUNT(*) FROM bookings AS b
                 WHERE b.weekly_rule_id = r.id AND b.status = 'active') AS generated_count,
@@ -1809,10 +1842,11 @@ def get_recurring_booking_rules(client_filter="", rule_status=""):
                     (SELECT b.id FROM bookings AS b WHERE b.weekly_rule_id = r.id)) AS deposit_history_count
         FROM recurring_booking_rules AS r
         JOIN clients AS c ON c.id = r.client_id
-        {where_sql}
+        WHERE (? = '' OR c.name LIKE ?)
+          AND (? IS NULL OR r.active = ?)
         ORDER BY r.active DESC, r.weekday, r.start_time, r.id DESC
         """,
-        params,
+        (client_filter, filter_pattern, status_value, status_value),
     ).fetchall()
     rules = []
     settings = get_app_settings()
@@ -1886,7 +1920,7 @@ def recurring_booking_new(rule_id=None):
         duration_hours = int(defaults["duration_hours"])
         hourly_rate = int(defaults["hourly_rate"])
         deposit = int(defaults["deposit"])
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return render_form("أكمل بيانات الحجز المتكرر بشكل صحيح.", 400)
 
     try:
@@ -1894,10 +1928,16 @@ def recurring_booking_new(rule_id=None):
             raise ValueError("اختر العميل واليوم بشكل صحيح.")
         if start.minute != 0 or hourly_rate < 0 or deposit < 0 or duration_hours < 1:
             raise ValueError("وقت البداية والسعر والعربون والمدة يجب أن تكون صحيحة.")
+        if hourly_rate > MAX_FINANCIAL_AMOUNT:
+            raise ValueError(f"سعر الساعة يتجاوز الحد الأقصى المسموح ({MAX_FINANCIAL_AMOUNT:,}).")
+        if deposit > MAX_FINANCIAL_AMOUNT:
+            raise ValueError(f"العربون يتجاوز الحد الأقصى المسموح ({MAX_FINANCIAL_AMOUNT:,}).")
         cycle_start_minutes, window_minutes = work_window(settings)
         start_offset = cycle_offset(start.strftime("%H:%M"), cycle_start_minutes)
         if start_offset >= window_minutes or duration_hours > (window_minutes - start_offset) // 60:
             raise ValueError("مدة الحجز تتجاوز دورة عمل الملعب.")
+        if hourly_rate * duration_hours > MAX_SQLITE_INTEGER:
+            raise ValueError("إجمالي الحجز الأسبوعي يتجاوز الحد الذي يمكن تخزينه بأمان.")
     except ValueError as error:
         return render_form(str(error), 400)
 
@@ -2216,7 +2256,9 @@ def booking_payments(booking_id):
         amount = int(request.form.get("amount", ""))
         if amount <= 0:
             raise PaymentError("يجب أن تكون قيمة الدفعة أكبر من صفر.")
-    except ValueError as error:
+        if amount > MAX_FINANCIAL_AMOUNT:
+            raise PaymentError(f"قيمة الدفعة تتجاوز الحد الأقصى المسموح ({MAX_FINANCIAL_AMOUNT:,}).")
+    except (ValueError, OverflowError) as error:
         message = str(error) if isinstance(error, PaymentError) else "أدخل مبلغًا صحيحًا للدفعة."
         page = get_payment_page(booking_id, error=message, amount=request.form.get("amount", ""), status=400)
         if page is None:
@@ -2310,6 +2352,16 @@ EXPENSE_CATEGORIES = ["كهرباء", "مياه", "صيانة", "رواتب", "�
 INCOME_CATEGORIES = ["تأجير معدات", "بيع مشروبات", "تأجير الملعب لأغراض أخرى", "رسوم أخرى", "أخرى"]
 
 
+def parse_iso_date(value, label):
+    try:
+        parsed = date.fromisoformat(value)
+    except (TypeError, ValueError, OverflowError):
+        raise ValueError(f"{label} غير صالح؛ استخدم صيغة YYYY-MM-DD.") from None
+    if parsed.isoformat() != value:
+        raise ValueError(f"{label} غير صالح؛ استخدم صيغة YYYY-MM-DD.")
+    return parsed
+
+
 def financial_values(form, field_name):
     values = {
         "amount": form.get("amount", ""),
@@ -2320,14 +2372,19 @@ def financial_values(form, field_name):
         field_name: form.get(field_name, stadium_business_date().isoformat()),
         "notes": form.get("notes", "").strip(),
     }
-    amount = int(values["amount"])
+    try:
+        amount = int(values["amount"])
+    except (TypeError, ValueError, OverflowError):
+        raise ValueError("أدخل مبلغًا صحيحًا واختر طريقة دفع صحيحة.") from None
     if amount <= 0 or values["payment_method"] not in {"cash", "transfer"}:
         raise ValueError("أدخل مبلغًا صحيحًا واختر طريقة دفع صحيحة.")
+    if amount > MAX_FINANCIAL_AMOUNT:
+        raise ValueError(f"المبلغ يتجاوز الحد الأقصى المسموح ({MAX_FINANCIAL_AMOUNT:,}).")
     if values["category"] == "أخرى":
         values["category"] = values["custom_category"]
     if not values["category"]:
         raise ValueError("اختر نوع العملية أو أدخل اسم النوع الآخر.")
-    datetime.strptime(values[field_name], "%Y-%m-%d")
+    values[field_name] = parse_iso_date(values[field_name], "تاريخ العملية").isoformat()
     values["amount"] = amount
     return values
 
@@ -2340,38 +2397,50 @@ def financial_list(kind):
     query = request.args.get("q", "").strip()
     start = request.args.get("start_date", "").strip()
     end = request.args.get("end_date", "").strip()
-    like_query = f"%{query}%"
-    params = (query, like_query, like_query, like_query, start, start, end, end)
-    if is_expense:
-        entries = get_db().execute(
-            """
-            SELECT * FROM expenses
-            WHERE (? = '' OR category LIKE ? OR description LIKE ? OR notes LIKE ?)
-              AND (? = '' OR expense_date >= ?)
-              AND (? = '' OR expense_date <= ?)
-            ORDER BY expense_date DESC, id DESC
-            """,
-            params,
-        ).fetchall()
+    error = None
+    try:
+        start_day = parse_iso_date(start, "تاريخ البداية") if start else None
+        end_day = parse_iso_date(end, "تاريخ النهاية") if end else None
+        if start_day and end_day and start_day > end_day:
+            raise ValueError("تاريخ البداية يجب ألا يأتي بعد تاريخ النهاية.")
+    except ValueError as exc:
+        error = str(exc)
+
+    if error:
+        entries = []
     else:
-        entries = get_db().execute(
-            """
-            SELECT * FROM other_income
-            WHERE (? = '' OR category LIKE ? OR description LIKE ? OR notes LIKE ?)
-              AND (? = '' OR income_date >= ?)
-              AND (? = '' OR income_date <= ?)
-            ORDER BY income_date DESC, id DESC
-            """,
-            params,
-        ).fetchall()
+        like_query = f"%{query}%"
+        params = (query, like_query, like_query, like_query, start, start, end, end)
+        if is_expense:
+            entries = get_db().execute(
+                """
+                SELECT * FROM expenses
+                WHERE (? = '' OR category LIKE ? OR description LIKE ? OR notes LIKE ?)
+                  AND (? = '' OR expense_date >= ?)
+                  AND (? = '' OR expense_date <= ?)
+                ORDER BY expense_date DESC, id DESC
+                """,
+                params,
+            ).fetchall()
+        else:
+            entries = get_db().execute(
+                """
+                SELECT * FROM other_income
+                WHERE (? = '' OR category LIKE ? OR description LIKE ? OR notes LIKE ?)
+                  AND (? = '' OR income_date >= ?)
+                  AND (? = '' OR income_date <= ?)
+                ORDER BY income_date DESC, id DESC
+                """,
+                params,
+            ).fetchall()
     return render_template(
         "financial_list.html", entries=entries, kind=kind,
         page_title="المصروفات" if is_expense else "واردات أخرى",
         new_endpoint="expense_new" if is_expense else "income_new",
         edit_endpoint="expense_edit" if is_expense else "income_edit",
         delete_endpoint="expense_delete" if is_expense else "income_delete",
-        date_field=date_field, query=query, start_date=start, end_date=end,
-    )
+        date_field=date_field, query=query, start_date=start, end_date=end, error=error,
+    ), 400 if error else 200
 
 
 @app.route("/admin/expenses", methods=["GET"])
@@ -2435,8 +2504,8 @@ def financial_form(kind, record_id=None):
             get_db().commit()
             flash("تم حفظ السجل بنجاح.", "success")
             return redirect(url_for("expenses_list" if is_expense else "income_list"))
-        except (TypeError, ValueError):
-            error = "تحقق من البيانات وأدخل تاريخًا ومبلغًا صحيحين."
+        except (TypeError, ValueError) as exc:
+            error = str(exc) or "تحقق من البيانات وأدخل تاريخًا ومبلغًا صحيحين."
         else:
             error = None
     else:

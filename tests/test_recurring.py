@@ -1,9 +1,16 @@
 from datetime import datetime
 
 import pytest
+from conftest import (
+    add_client,
+    db_query,
+    insert_booking,
+    login_as_admin,
+    post_form,
+    recurring_payload,
+)
 
 import app as stadium
-from conftest import add_client, db_query, insert_booking, login_as_admin, post_form, recurring_payload
 
 
 @pytest.fixture(autouse=True)
@@ -53,6 +60,17 @@ def test_invalid_weekly_rule_inputs_are_rejected(client, field, value):
     response = post_form(client, "/admin/recurring-bookings/new", payload)
     assert response.status_code == 400
     assert db_query("SELECT * FROM recurring_booking_rules") == []
+
+
+@pytest.mark.parametrize("field", ["hourly_rate", "deposit"])
+def test_weekly_rule_rejects_financial_values_above_safe_limit(client, field):
+    login_as_admin(client)
+    customer=add_client()
+    payload=recurring_payload(customer)
+    payload[field]=str(stadium.MAX_FINANCIAL_AMOUNT + 1)
+    response=post_form(client,"/admin/recurring-bookings/new",payload)
+    assert response.status_code==400
+    assert db_query("SELECT * FROM recurring_booking_rules")==[]
 
 
 def test_rule_rejects_nonexistent_client(client):

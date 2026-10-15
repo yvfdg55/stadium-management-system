@@ -1,8 +1,17 @@
 from datetime import datetime
 
 import pytest
+from conftest import (
+    add_client,
+    booking_payload,
+    db_query,
+    insert_booking,
+    login_as_admin,
+    post_form,
+    recurring_payload,
+)
+
 import app as stadium
-from conftest import add_client, db_query, insert_booking, login_as_admin, post_form, booking_payload, recurring_payload
 
 
 def test_admin_pages_render(client):
@@ -59,6 +68,31 @@ def test_financial_crud_and_search(base,date_field,table,client):
     assert post_form(client,f"{list_path}/{row['id']}/delete").status_code==302 and db_query(f"SELECT * FROM {table}")==[]
 
 
+@pytest.mark.parametrize("base,date_field,table", [
+    ("/admin/expenses/new", "expense_date", "expenses"),
+    ("/admin/income/new", "income_date", "other_income"),
+])
+def test_financial_records_reject_amount_above_safe_limit(base,date_field,table,client):
+    login_as_admin(client)
+    payload=finance_payload(str(stadium.MAX_FINANCIAL_AMOUNT + 1),date_field=date_field)
+    assert post_form(client,base,payload).status_code==200
+    assert db_query(f"SELECT * FROM {table}")==[]
+
+
+@pytest.mark.parametrize("path", ["/admin/expenses", "/admin/income"])
+@pytest.mark.parametrize("query", [
+    "start_date=2025-02-30",
+    "end_date=20250101",
+    "start_date=2025-01-02&end_date=2025-01-01",
+])
+def test_financial_lists_reject_invalid_or_reversed_date_filters(path,query,client):
+    login_as_admin(client)
+    response=client.get(f"{path}?{query}")
+    body=response.get_data(as_text=True)
+    assert response.status_code==400
+    assert "YYYY-MM-DD" in body or "يجب ألا يأتي بعد" in body
+
+
 @pytest.mark.parametrize("amount,category,method,day",[("0","صيانة","cash","2025-01-06"),("-1","صيانة","cash","2025-01-06"),("bad","صيانة","cash","2025-01-06"),("10","","cash","2025-01-06"),("10","أخرى","cash","2025-01-06"),("10","صيانة","crypto","2025-01-06"),("10","صيانة","cash","bad")])
 def test_financial_validation_rejects_bad_input(client,amount,category,method,day):
     login_as_admin(client)
@@ -81,6 +115,17 @@ def test_custom_reports_validate_period(client):
     assert client.get("/admin/reports?start_date=2025-01-01&end_date=2025-01-31").status_code==200
 
 
+def test_trusted_hosts_are_required_in_production_and_parsed_explicitly():
+    assert stadium.resolve_trusted_hosts(" stadium.example, www.stadium.example ", "production")==[
+        "stadium.example", "www.stadium.example"
+    ]
+    assert stadium.resolve_trusted_hosts("", "development") is None
+    with pytest.raises(RuntimeError,match="TRUSTED_HOSTS"):
+        stadium.resolve_trusted_hosts("  , ", "production")
+    with pytest.raises(RuntimeError,match="exact hostnames"):
+        stadium.resolve_trusted_hosts("*.example.com", "production")
+
+
 def settings_payload(start="10:00",end="22:00"):
     return {"venue_name":"الملعب","venue_phone":"","venue_address":"","venue_policy":"سياسة","hourly_rate":"100","work_start":start,"work_end":end,"booking_duration":"1","primary_color":"#237447","secondary_color":"#d64b27"}
 
@@ -91,6 +136,13 @@ def test_settings_reject_window_that_hides_active_booking_or_rule(client,monkeyp
     assert db_query("SELECT setting_value FROM app_settings WHERE setting_key='work_start'")[0]["setting_value"]=="10:00"
     # Keep the normal window but update other settings despite an old boundary booking.
     assert post_form(client,"/admin/settings",settings_payload("10:00","10:00")).status_code==302
+
+
+def test_settings_reject_hourly_rate_above_safe_limit(client):
+    login_as_admin(client)
+    payload=settings_payload()
+    payload["hourly_rate"]=str(stadium.MAX_FINANCIAL_AMOUNT + 1)
+    assert post_form(client,"/admin/settings",payload).status_code==400
 
 
 def test_settings_reject_window_excluding_active_weekly_rule(client,monkeypatch):
