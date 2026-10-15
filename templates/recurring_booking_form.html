@@ -29,6 +29,9 @@
       {% endif %}
     </div>
     {% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}<div class="alert {{ category }}" role="status">{{ message }}</div>{% endfor %}
+    {% endwith %}
 
     <form class="form-card recurring-form" method="post" action="{{ url_for('recurring_booking_new', rule_id=rule_id) if rule_id else url_for('recurring_booking_new') }}">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
@@ -84,9 +87,30 @@
       <div class="section-heading">
         <div>
           <h2 id="recurring-rules-title">الحجوزات الأسبوعية المسجلة</h2>
-          <p class="muted compact">من هنا يمكنك تعديل السلسلة أو إيقافها أو استئنافها.</p>
+          <p class="muted compact">ابحث باسم العميل أو رشّح السلاسل حسب الحالة. الحذف النهائي متاح فقط عند عدم وجود دفعات أو حركات عربون محفوظة.</p>
         </div>
       </div>
+      <form class="form-card recurring-rules-filter" method="get" action="{{ url_for('recurring_booking_new') }}">
+        <div class="booking-fields">
+          <div class="booking-field">
+            <label for="client_filter">اسم العميل</label>
+            <input id="client_filter" name="client_filter" type="search" value="{{ client_filter }}" maxlength="100" placeholder="اكتب الاسم أو جزءًا منه">
+          </div>
+          <div class="booking-field">
+            <label for="rule_status">حالة السلسلة</label>
+            <select id="rule_status" name="rule_status">
+              <option value="" {{ 'selected' if not rule_status else '' }}>جميع الحالات</option>
+              <option value="active" {{ 'selected' if rule_status == 'active' else '' }}>نشطة</option>
+              <option value="stopped" {{ 'selected' if rule_status == 'stopped' else '' }}>متوقفة</option>
+            </select>
+          </div>
+        </div>
+        <div class="recurring-filter-actions">
+          <button class="recurring-button small" type="submit">تطبيق الفلترة</button>
+          <a class="button-link small secondary" href="{{ url_for('recurring_booking_new') }}">مسح الفلاتر</a>
+        </div>
+      </form>
+      <p class="recurring-filter-count" role="status">عدد النتائج: {{ rules|length }}</p>
       {% if rules %}
         <ul class="recurring-rules-list">
           {% for rule in rules %}
@@ -100,24 +124,38 @@
                 {% endif %}
               </div>
               <div class="recurring-rule-actions">
-                <a class="button-link small secondary" href="{{ url_for('recurring_booking_new', rule_id=rule['id']) }}">تعديل السلسلة</a>
+                <a class="button-link small secondary" href="{{ url_for('recurring_booking_new', rule_id=rule['id'], client_filter=client_filter or None, rule_status=rule_status or None) }}">تعديل السلسلة</a>
                 {% if rule['active'] %}
                   <form method="post" action="{{ url_for('recurring_booking_stop', rule_id=rule['id']) }}" onsubmit="return confirm('هل تريد إيقاف الحجز الأسبوعي؟ ستبقى المواعيد المنشأة مسبقًا محجوزة.');">
                     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="client_filter" value="{{ client_filter }}">
+                    <input type="hidden" name="rule_status" value="{{ rule_status }}">
                     <button class="danger small" type="submit">إيقاف السلسلة</button>
                   </form>
                 {% else %}
                   <form method="post" action="{{ url_for('recurring_booking_resume', rule_id=rule['id']) }}">
                     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="client_filter" value="{{ client_filter }}">
+                    <input type="hidden" name="rule_status" value="{{ rule_status }}">
                     <button class="recurring-button small" type="submit">استئناف السلسلة</button>
                   </form>
+                {% endif %}
+                {% if rule['can_hard_delete'] %}
+                  <form method="post" action="{{ url_for('recurring_booking_delete', rule_id=rule['id']) }}" onsubmit="return confirm('سيتم حذف قاعدة التكرار وجميع المواعيد المرتبطة بها نهائيًا، ولا يمكن التراجع. هل تريد المتابعة؟');">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="client_filter" value="{{ client_filter }}">
+                    <input type="hidden" name="rule_status" value="{{ rule_status }}">
+                    <button class="danger small" type="submit">حذف نهائي</button>
+                  </form>
+                {% else %}
+                  <span class="recurring-delete-locked" title="توجد دفعات أو حركات عربون مرتبطة بالسلسلة">حذفها مقيد بسجل مالي</span>
                 {% endif %}
               </div>
             </li>
           {% endfor %}
         </ul>
       {% else %}
-        <div class="empty-state"><p>لا توجد حجوزات أسبوعية مسجلة حتى الآن.</p></div>
+        <div class="empty-state"><p>{{ 'لا توجد سلاسل تطابق الفلاتر المحددة.' if client_filter or rule_status else 'لا توجد حجوزات أسبوعية مسجلة حتى الآن.' }}</p></div>
       {% endif %}
     </section>
   </main>

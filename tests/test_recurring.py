@@ -247,3 +247,83 @@ def test_recurrence_materialization_is_idempotent(client):
     assert first == 0
     assert second == 0
     assert len(db_query("SELECT id FROM bookings WHERE weekly_rule_id=?", (rule_id,))) == 52
+
+
+def test_weekly_rule_list_filters_by_client_name_and_state(client):
+    login_as_admin(client)
+    customer_a=add_client(name="أحمد الزيود",phone="0792000001")
+    customer_b=add_client(name="ليلى عمران",phone="0792000002")
+    post_form(client,"/admin/recurring-bookings/new",recurring_payload(customer_a,start_time="14:00"))
+    post_form(client,"/admin/recurring-bookings/new",recurring_payload(customer_b,start_time="16:00"))
+    rule_b=db_query("SELECT id FROM recurring_booking_rules WHERE client_id=?",(customer_b,))[0]["id"]
+    post_form(client,f"/admin/recurring-bookings/{rule_b}/stop")
+    with stadium.app.app_context():
+        active=stadium.get_recurring_booking_rules("أحمد","active")
+        stopped=stadium.get_recurring_booking_rules("عمران","stopped")
+    assert len(active)==1 and active[0]["client_name"]=="أحمد الزيود"
+    assert len(stopped)==1 and stopped[0]["client_name"]=="ليلى عمران"
+    page=client.get("/admin/recurring-bookings/new?client_filter=أحمد&rule_status=active")
+    body=page.get_data(as_text=True)
+    listed=body.split('<ul class="recurring-rules-list">',1)[1].split("</ul>",1)[0]
+    assert page.status_code==200 and "أحمد الزيود" in listed and "ليلى عمران" not in listed
+    assert "عدد النتائج: 1" in body and 'name="client_filter"' in body
+    stopped_page=client.get("/admin/recurring-bookings/new?client_filter=عمران&rule_status=stopped")
+    stopped_body=stopped_page.get_data(as_text=True)
+    stopped_list=stopped_body.split('<ul class="recurring-rules-list">',1)[1].split("</ul>",1)[0]
+    assert "ليلى عمران" in stopped_list and "أحمد الزيود" not in stopped_list
+
+
+def test_hard_delete_unpaid_weekly_rule_removes_its_occurrences_only(client):
+    login_as_admin(client)
+    customer=add_client()
+    post_form(client,"/admin/recurring-bookings/new",recurring_payload(customer,hourly_rate=0,deposit=0))
+    rule_id=db_query("SELECT id FROM recurring_booking_rules")[0]["id"]
+    insert_booking(customer,booking_date="2025-01-06",start_time="17:00")
+    with stadium.app.app_context():
+        db=stadium.get_db(); db.execute("UPDATE bookings SET status='cancelled' WHERE weekly_rule_id=? AND booking_date='2025-01-13'",(rule_id,)); db.commit()
+    assert len(db_query("SELECT id FROM bookings WHERE weekly_rule_id=?",(rule_id,)))==52
+    assert client.get(f"/admin/recurring-bookings/{rule_id}/delete").status_code==405
+    response=post_form(client,f"/admin/recurring-bookings/{rule_id}/delete",{"client_filter":"عميل اختبار","rule_status":"active"})
+    assert response.status_code==302 and "client_filter" in response.headers["Location"]
+    assert db_query("SELECT id FROM recurring_booking_rules") == []
+    assert db_query("SELECT id FROM bookings WHERE weekly_rule_id=?",(rule_id,)) == []
+    assert len(db_query("SELECT id FROM bookings WHERE weekly_rule_id IS NULL"))==1
+    confirmation=client.get(response.headers["Location"]).get_data(as_text=True)
+    assert "تم حذف الحجز الأسبوعي نهائيًا" in confirmation
+
+
+@pytest.mark.parametrize("history_type",["booking_payment","deposit_transaction"])
+def test_hard_delete_is_blocked_when_weekly_series_has_financial_history(client,history_type):
+    login_as_admin(client)
+    customer=add_client(name=f"حساب {history_type}")
+    deposit=75 if history_type=="deposit_transaction" else 0
+    post_form(client,"/admin/recurring-bookings/new",recurring_payload(customer,deposit=deposit))
+    rule_id=db_query("SELECT id FROM recurring_booking_rules")[0]["id"]
+    if history_type=="booking_payment":
+        booking_id=db_query("SELECT id FROM bookings WHERE weekly_rule_id=? ORDER BY booking_date LIMIT 1",(rule_id,))[0]["id"]
+        with stadium.app.app_context():
+            db=stadium.get_db(); db.execute("INSERT INTO booking_payments (booking_id,amount) VALUES (?,10)",(booking_id,)); db.commit()
+    with stadium.app.app_context():
+        rules=stadium.get_recurring_booking_rules()
+    assert rules[0]["can_hard_delete"] is False
+    response=post_form(client,f"/admin/recurring-bookings/{rule_id}/delete")
+    assert response.status_code==302
+    assert len(db_query("SELECT id FROM recurring_booking_rules WHERE id=?",(rule_id,)))==1
+    assert len(db_query("SELECT id FROM bookings WHERE weekly_rule_id=?",(rule_id,)))==52
+    message=client.get(response.headers["Location"]).get_data(as_text=True)
+    assert "مرتبطة بدفعات أو حركات عربون محفوظة" in message
+    assert "حذفها مقيد بسجل مالي" in message
+
+
+def test_weekly_delete_requires_login_and_csrf_and_handles_missing_rule(client):
+    assert client.get("/admin/recurring-bookings/new").status_code==302
+    assert client.post("/admin/recurring-bookings/999/delete").status_code==400
+    login_as_admin(client)
+    customer=add_client()
+    post_form(client,"/admin/recurring-bookings/new",recurring_payload(customer,deposit=0))
+    rule_id=db_query("SELECT id FROM recurring_booking_rules")[0]["id"]
+    assert client.post(f"/admin/recurring-bookings/{rule_id}/delete",data={}).status_code==400
+    assert len(db_query("SELECT id FROM recurring_booking_rules WHERE id=?",(rule_id,)))==1
+    missing=post_form(client,"/admin/recurring-bookings/999/delete")
+    assert missing.status_code==302
+    assert "سبق حذفه" in client.get(missing.headers["Location"]).get_data(as_text=True)

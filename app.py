@@ -1783,24 +1783,43 @@ def materialize_recurring_rule(db, rule_id, weeks=52):
     return created
 
 
-def get_recurring_booking_rules():
+def get_recurring_booking_rules(client_filter="", rule_status=""):
     weekday_names = ["الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد"]
     db = get_db()
+    where = []
+    params = []
+    if client_filter:
+        where.append("c.name LIKE ?")
+        params.append(f"%{client_filter}%")
+    if rule_status == "active":
+        where.append("r.active = 1")
+    elif rule_status == "stopped":
+        where.append("r.active = 0")
+    where_sql = f"WHERE {' AND '.join(where)}" if where else ""
     rows = db.execute(
-        """
+        f"""
         SELECT r.*, c.name AS client_name,
                (SELECT COUNT(*) FROM bookings AS b
-                WHERE b.weekly_rule_id = r.id AND b.status = 'active') AS generated_count
+                WHERE b.weekly_rule_id = r.id AND b.status = 'active') AS generated_count,
+               (SELECT COUNT(*) FROM booking_payments AS p
+                JOIN bookings AS b ON b.id = p.booking_id
+                WHERE b.weekly_rule_id = r.id) AS payment_history_count,
+               (SELECT COUNT(*) FROM recurring_deposit_transactions AS t
+                WHERE t.rule_id = r.id OR t.booking_id IN
+                    (SELECT b.id FROM bookings AS b WHERE b.weekly_rule_id = r.id)) AS deposit_history_count
         FROM recurring_booking_rules AS r
         JOIN clients AS c ON c.id = r.client_id
+        {where_sql}
         ORDER BY r.active DESC, r.weekday, r.start_time, r.id DESC
-        """
+        """,
+        params,
     ).fetchall()
     rules = []
     settings = get_app_settings()
     for row in rows:
         rule = dict(row)
         rule["weekday_name"] = weekday_names[rule["weekday"]]
+        rule["can_hard_delete"] = not rule["payment_history_count"] and not rule["deposit_history_count"]
         rule["conflict_message"] = recurring_rule_conflict_message(
             db, rule, exclude_rule_id=rule["id"], settings=settings
         )
@@ -1813,6 +1832,10 @@ def get_recurring_booking_rules():
 @login_required
 def recurring_booking_new(rule_id=None):
     settings = get_app_settings()
+    client_filter = request.args.get("client_filter", "").strip()[:100]
+    rule_status = request.args.get("rule_status", "")
+    if rule_status not in ("", "active", "stopped"):
+        rule_status = ""
     existing_rule = None
     if rule_id is not None:
         existing_rule = get_db().execute(
@@ -1847,7 +1870,9 @@ def recurring_booking_new(rule_id=None):
             start_time_options=start_time_options,
             rule_id=rule_id,
             rule_active=bool(existing_rule["active"]) if existing_rule else True,
-            rules=get_recurring_booking_rules(),
+            rules=get_recurring_booking_rules(client_filter, rule_status),
+            client_filter=client_filter,
+            rule_status=rule_status,
             error=error,
         ), status
 
@@ -2015,6 +2040,19 @@ def recurring_booking_new(rule_id=None):
     return redirect(url_for("booking_screen"))
 
 
+def redirect_to_recurring_booking_list():
+    client_filter = request.values.get("client_filter", "").strip()[:100]
+    rule_status = request.values.get("rule_status", "")
+    if rule_status not in ("", "active", "stopped"):
+        rule_status = ""
+    query = {}
+    if client_filter:
+        query["client_filter"] = client_filter
+    if rule_status:
+        query["rule_status"] = rule_status
+    return redirect(url_for("recurring_booking_new", **query))
+
+
 @app.route("/admin/recurring-bookings/<int:rule_id>/stop", methods=["POST"])
 @login_required
 def recurring_booking_stop(rule_id):
@@ -2022,12 +2060,63 @@ def recurring_booking_stop(rule_id):
     rule = db.execute("SELECT id FROM recurring_booking_rules WHERE id = ?", (rule_id,)).fetchone()
     if rule is None:
         flash("الحجز الأسبوعي غير موجود.", "error")
-        return redirect(url_for("recurring_booking_new"))
+        return redirect_to_recurring_booking_list()
     db.execute("BEGIN IMMEDIATE")
     db.execute("UPDATE recurring_booking_rules SET active = 0 WHERE id = ?", (rule_id,))
     db.commit()
     flash("تم إيقاف الحجز الأسبوعي؛ المواعيد المنشأة سابقًا محفوظة.", "success")
-    return redirect(url_for("recurring_booking_new"))
+    return redirect_to_recurring_booking_list()
+
+
+@app.route("/admin/recurring-bookings/<int:rule_id>/delete", methods=["POST"])
+@login_required
+def recurring_booking_delete(rule_id):
+    db = get_db()
+    db.execute("BEGIN IMMEDIATE")
+    rule = db.execute("SELECT id FROM recurring_booking_rules WHERE id = ?", (rule_id,)).fetchone()
+    if rule is None:
+        db.rollback()
+        flash("الحجز الأسبوعي غير موجود أو سبق حذفه.", "error")
+        return redirect_to_recurring_booking_list()
+
+    has_booking_payments = db.execute(
+        """
+        SELECT 1 FROM booking_payments AS p
+        JOIN bookings AS b ON b.id = p.booking_id
+        WHERE b.weekly_rule_id = ? LIMIT 1
+        """,
+        (rule_id,),
+    ).fetchone()
+    has_deposit_history = db.execute(
+        """
+        SELECT 1 FROM recurring_deposit_transactions
+        WHERE rule_id = ? OR booking_id IN
+            (SELECT id FROM bookings WHERE weekly_rule_id = ?)
+        LIMIT 1
+        """,
+        (rule_id, rule_id),
+    ).fetchone()
+    if has_booking_payments or has_deposit_history:
+        db.rollback()
+        flash(
+            "تعذر الحذف النهائي لأن السلسلة مرتبطة بدفعات أو حركات عربون محفوظة. أوقف السلسلة بدلًا من حذف سجلها المالي.",
+            "error",
+        )
+        return redirect_to_recurring_booking_list()
+
+    deleted_count = db.execute(
+        "SELECT COUNT(*) FROM bookings WHERE weekly_rule_id = ?", (rule_id,)
+    ).fetchone()[0]
+    try:
+        db.execute("DELETE FROM bookings WHERE weekly_rule_id = ?", (rule_id,))
+        db.execute("DELETE FROM recurring_booking_rules WHERE id = ?", (rule_id,))
+        db.commit()
+    except sqlite3.IntegrityError:
+        db.rollback()
+        flash("تعذر الحذف لأن هناك سجلًا مرتبطًا بهذه السلسلة؛ لم تُحذف أي بيانات.", "error")
+        return redirect_to_recurring_booking_list()
+    flash(f"تم حذف الحجز الأسبوعي نهائيًا وحذف {deleted_count} موعدًا مرتبطًا به.", "success")
+    return redirect_to_recurring_booking_list()
 
 
 @app.route("/admin/recurring-bookings/<int:rule_id>/resume", methods=["POST"])
@@ -2051,10 +2140,10 @@ def recurring_booking_resume(rule_id):
         db.rollback()
         if isinstance(error, (ValueError, BookingConflict)):
             flash(str(error), "error")
-            return redirect(url_for("recurring_booking_new"))
+            return redirect_to_recurring_booking_list()
         raise
     flash("تم استئناف الحجز الأسبوعي.", "success")
-    return redirect(url_for("recurring_booking_new"))
+    return redirect_to_recurring_booking_list()
 
 
 @app.route("/admin/bookings/<int:booking_id>/edit", methods=["GET", "POST"])
