@@ -26,6 +26,14 @@
 
     {% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
 
+    {% if weekly_rule_id %}
+      <div class="recurring-notice">
+        هذا التعديل يخص هذه المناسبة فقط، وليس جميع الأسابيع. لتغيير السلسلة كلها
+        <a href="{{ url_for('recurring_booking_new', rule_id=weekly_rule_id) }}">عدّل قاعدة الحجز الأسبوعي</a>.
+        لا يمكن نقل هذه المناسبة إلى تاريخ آخر؛ ألغها وأنشئ حجزًا عاديًا بالتاريخ الجديد.
+      </div>
+    {% endif %}
+
     {% if not clients %}
       <div class="empty-state client-required">
         <p>أضف عميلًا قبل إنشاء الحجز.</p>
@@ -56,7 +64,8 @@
 
         <div class="booking-field">
           <label for="booking_date">التاريخ</label>
-          <input id="booking_date" name="booking_date" type="date" value="{{ form['booking_date'] }}" required>
+          <input id="booking_date" name="booking_date" type="date" value="{{ form['booking_date'] }}" {% if weekly_rule_id %}readonly aria-describedby="weekly-date-help"{% endif %} required>
+          {% if weekly_rule_id %}<small id="weekly-date-help" class="field-help">تاريخ المناسبة الأسبوعية ثابت في هذا النموذج.</small>{% endif %}
         </div>
 
         <div class="booking-field">

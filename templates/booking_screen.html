@@ -64,17 +64,22 @@
       <div class="booking-hours-grid">
         {% for slot in slots %}
           {% if slot['booking'] %}
-            {% if slot['booking']['booking_type'] == 'recurring' %}
-            <a class="hour-card status-recurring"
-               href="{{ url_for('booking_edit', booking_id=slot['booking']['id']) }}"
-               aria-label="تعديل الحجز المتكرر {{ slot['start'] }} إلى {{ slot['end'] }}، {{ slot['booking']['client_name'] }}">
-              <span class="hour-time">{{ slot['start'] }} - {{ slot['end'] }}</span>
-              <span class="hour-status">{{ slot['booking']['status_label'] }}</span>
-              <span class="hour-client">{{ slot['booking']['client_name'] }}</span>
-              {% if slot['booking']['short_phone'] %}
-                <span class="hour-phone">{{ slot['booking']['short_phone'] }}</span>
+            {% if slot['booking']['booking_type'] == 'recurring' or slot['booking']['weekly_rule_id'] %}
+            <div class="recurring-booking-wrap">
+              <a class="hour-card status-recurring"
+                 href="{{ url_for('recurring_booking_new', rule_id=slot['booking']['weekly_rule_id']) if slot['booking']['weekly_rule_id'] else url_for('booking_edit', booking_id=slot['booking']['id']) }}"
+                 aria-label="إدارة الحجز الأسبوعي {{ slot['start'] }} إلى {{ slot['end'] }}، {{ slot['booking']['client_name'] }}">
+                <span class="hour-time">{{ slot['start'] }} - {{ slot['end'] }}</span>
+                <span class="hour-status">{{ slot['booking']['status_label'] }} — إدارة السلسلة</span>
+                <span class="hour-client">{{ slot['booking']['client_name'] }}</span>
+                {% if slot['booking']['short_phone'] %}
+                  <span class="hour-phone">{{ slot['booking']['short_phone'] }}</span>
+                {% endif %}
+              </a>
+              {% if slot['booking']['weekly_rule_id'] %}
+                <a class="recurring-instance-link" href="{{ url_for('booking_edit', booking_id=slot['booking']['id']) }}">تعديل أو إلغاء هذه المناسبة فقط</a>
               {% endif %}
-            </a>
+            </div>
             {% else %}
             <a class="hour-card status-{{ slot['booking']['card_state'] }}"
                href="{{ url_for('booking_edit', booking_id=slot['booking']['id']) }}"

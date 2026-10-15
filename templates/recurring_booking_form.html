@@ -20,7 +20,13 @@
       <a class="button-link secondary" href="{{ url_for('booking_screen') }}">الحجوزات</a>
     </header>
 
-    <div class="recurring-notice">هذا الحجز يتكرر كل أسبوع في اليوم والساعة المحددين، ولا يرتبط بتاريخ انتهاء.</div>
+    <div class="recurring-notice">
+      {% if rule_id and not rule_active %}
+        هذا الحجز الأسبوعي متوقف. تعديل بياناته لا يعيد تشغيله؛ استخدم زر «استئناف» من قائمة الحجوزات الأسبوعية.
+      {% else %}
+        هذا الحجز يتكرر كل أسبوع في اليوم والساعة المحددين، ولا يرتبط بتاريخ انتهاء.
+      {% endif %}
+    </div>
     {% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
 
     <form class="form-card recurring-form" method="post" action="{{ url_for('recurring_booking_new', rule_id=rule_id) if rule_id else url_for('recurring_booking_new') }}">
@@ -45,7 +51,7 @@
         </div>
         <div class="booking-field">
           <label for="start_time">وقت البداية</label>
-          <input id="start_time" name="start_time" type="time" value="{{ form['start_time'] }}" required>
+          <input id="start_time" name="start_time" type="time" step="3600" value="{{ form['start_time'] }}" required>
         </div>
         <div class="booking-field">
           <label for="duration_hours">عدد الساعات</label>
@@ -54,11 +60,12 @@
         <div class="booking-field">
           <label for="hourly_rate">سعر الساعة</label>
           <input id="hourly_rate" name="hourly_rate" type="number" min="0" step="1" value="{{ form['hourly_rate'] }}" required>
+          <small class="field-help">يمكن إدخال 0 للحجز الأسبوعي المجاني.</small>
         </div>
         <div class="booking-field">
           <label for="deposit">العربون الثابت</label>
           <input id="deposit" name="deposit" type="number" min="0" step="1" value="{{ form['deposit'] }}" required>
-          <small class="field-help">العربون مستقل وثابت ولا يُخصم من قيمة الحجز.</small>
+          <small class="field-help">العربون مستقل وثابت ولا يُخصم من قيمة الحجز. تعديل القيمة لا يغيّر تلقائيًا سجل التحصيل أو الرد السابق.</small>
         </div>
         <div class="booking-field notes-field">
           <label for="notes">ملاحظات</label>
@@ -67,12 +74,47 @@
       </div>
       <button class="recurring-button" type="submit">{{ 'حفظ تعديل الحجز' if rule_id else 'حفظ الحجز الأسبوعي الدائم' }}</button>
     </form>
-    {% if rule_id %}
-      <form method="post" action="{{ url_for('recurring_booking_stop', rule_id=rule_id) }}" onsubmit="return confirm('هل تريد إيقاف الحجز الأسبوعي؟');">
-        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-        <button class="danger" type="submit">إيقاف الحجز الأسبوعي</button>
-      </form>
-    {% endif %}
+
+    <section class="recurring-rules-section" aria-labelledby="recurring-rules-title">
+      <div class="section-heading">
+        <div>
+          <h2 id="recurring-rules-title">الحجوزات الأسبوعية المسجلة</h2>
+          <p class="muted compact">من هنا يمكنك تعديل السلسلة أو إيقافها أو استئنافها.</p>
+        </div>
+      </div>
+      {% if rules %}
+        <ul class="recurring-rules-list">
+          {% for rule in rules %}
+            <li class="recurring-rule-item">
+              <div class="recurring-rule-details">
+                <strong>{{ rule['client_name'] }} — {{ rule['weekday_name'] }}، {{ rule['start_time'] }}</strong>
+                <span>{{ rule['duration_hours'] }} ساعة · {{ rule['hourly_rate'] }} لكل ساعة · عربون {{ rule['deposit'] }}</span>
+                <span>{{ 'نشط' if rule['active'] else 'متوقف' }} · {{ rule['generated_count'] }} موعد محجوز مسبقًا</span>
+                {% if rule['conflict_message'] %}
+                  <span class="recurring-conflict" role="alert">{{ rule['conflict_message'] }}</span>
+                {% endif %}
+              </div>
+              <div class="recurring-rule-actions">
+                <a class="button-link small secondary" href="{{ url_for('recurring_booking_new', rule_id=rule['id']) }}">تعديل السلسلة</a>
+                {% if rule['active'] %}
+                  <form method="post" action="{{ url_for('recurring_booking_stop', rule_id=rule['id']) }}" onsubmit="return confirm('هل تريد إيقاف الحجز الأسبوعي؟ ستبقى المواعيد المنشأة مسبقًا محجوزة.');">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                    <button class="danger small" type="submit">إيقاف السلسلة</button>
+                  </form>
+                {% else %}
+                  <form method="post" action="{{ url_for('recurring_booking_resume', rule_id=rule['id']) }}">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                    <button class="recurring-button small" type="submit">استئناف السلسلة</button>
+                  </form>
+                {% endif %}
+              </div>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <div class="empty-state"><p>لا توجد حجوزات أسبوعية مسجلة حتى الآن.</p></div>
+      {% endif %}
+    </section>
   </main>
   <button class="theme-toggle" data-theme-toggle type="button" aria-label="تبديل الوضع" aria-pressed="false"></button>
 </body>
