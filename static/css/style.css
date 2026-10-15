@@ -325,11 +325,12 @@ button.secondary:hover, .button-link.secondary:hover { background: #e8edd1; }
 }
 .hour-card:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(18, 32, 51, .1); }
 .hour-card:focus-visible { outline: 3px solid rgba(37, 99, 235, .35); outline-offset: 2px; }
-.hour-time { display: flex; justify-content: center; direction: ltr; white-space: nowrap; font-size: clamp(.58rem, 2.5vw, .92rem); font-weight: 700; font-variant-numeric: tabular-nums; }
+.hour-time { display: flex; width: 100%; justify-content: center; direction: ltr; white-space: nowrap; font-size: clamp(.86rem, 2.4vw, 1.08rem); font-weight: 700; font-variant-numeric: tabular-nums; }
+.hour-time .time-range { width: 100%; justify-content: space-between; gap: .15rem; }
 .time-range { display: inline-flex; align-items: center; justify-content: center; gap: .28rem; direction: ltr; white-space: nowrap; }
 .time-label { display: inline-flex; align-items: center; gap: .16rem; direction: ltr; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .time-clock { font-weight: 800; }
-.time-period { padding: .03rem .28rem; border: 1px solid var(--line); border-radius: 999px; color: var(--blue-dark); background: var(--surface); font-size: .72em; font-weight: 800; line-height: 1.35; text-decoration: none; }
+.time-period { padding: .04rem .28rem; border: 1px solid var(--line); border-radius: 999px; color: var(--blue-dark); background: var(--surface); font-size: .9em; font-weight: 800; line-height: 1.35; text-decoration: none; }
 .time-range-separator { color: var(--muted); font-size: .85em; font-weight: 400; }
 .hour-status { font-size: .82rem; font-weight: 700; }
 .hour-status::before { display: inline-block; width: .55rem; height: .55rem; margin-left: .25rem; border-radius: 50%; background: currentColor; content: ""; vertical-align: .05rem; }
@@ -592,7 +593,7 @@ button.danger:hover { background: #ffe4e6; }
   .client-stat-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .days-strip { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); overflow: visible; }
   .day-card { min-width: 0; }
-  .booking-hours-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: .7rem; }
+  .booking-hours-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .7rem; }
   .booking-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .booking-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .report-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; }
@@ -610,6 +611,10 @@ button.danger:hover { background: #ffe4e6; }
   .dashboard-insights-grid { grid-template-columns: minmax(0, 1.35fr) minmax(15rem, .65fr); }
 }
 
+@media (min-width: 1200px) {
+  .booking-hours-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+
 @media (max-width: 360px) {
   .booking-hours-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .hour-card { min-height: 6.5rem; }
@@ -617,6 +622,7 @@ button.danger:hover { background: #ffe4e6; }
   .booking-hours-header > .button-link { align-self: flex-start; }
 }
 @media (max-width: 560px) {
+  .booking-hours-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .recurring-rule-item { align-items: stretch; flex-direction: column; }
   .recurring-rule-actions { display: grid; grid-template-columns: 1fr; width: 100%; }
   .recurring-rule-actions .button-link, .recurring-rule-actions button { width: 100%; text-align: center; }
