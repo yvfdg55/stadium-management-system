@@ -3,11 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{ 'تعديل الحجز' if booking_id else 'حجز موعد' }} | إدارة الملعب</title>
+  <title>{{ 'تعديل الحجز' if booking_id else 'حجز موعد' }} | Happy Family Resort</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   <link rel="stylesheet" href="{{ url_for('theme_css') }}">
   <script src="{{ url_for('static', filename='js/theme.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/client-picker.js') }}" defer></script>
+  {% include '_pwa_head.html' %}
 </head>
 <body>
   {% include "_admin_nav.html" %}
@@ -24,6 +25,14 @@
     </header>
 
     {% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
+
+    {% if weekly_rule_id %}
+      <div class="recurring-notice">
+        هذا التعديل يخص هذه المناسبة فقط، وليس جميع الأسابيع. لتغيير السلسلة كلها
+        <a href="{{ url_for('recurring_booking_new', rule_id=weekly_rule_id) }}">عدّل قاعدة الحجز الأسبوعي</a>.
+        لا يمكن نقل هذه المناسبة إلى تاريخ آخر؛ ألغها وأنشئ حجزًا عاديًا بالتاريخ الجديد.
+      </div>
+    {% endif %}
 
     {% if not clients %}
       <div class="empty-state client-required">
@@ -55,21 +64,22 @@
 
         <div class="booking-field">
           <label for="booking_date">التاريخ</label>
-          <input id="booking_date" name="booking_date" type="date" value="{{ form['booking_date'] }}" required>
+          <input id="booking_date" name="booking_date" type="date" value="{{ form['booking_date'] }}" {% if weekly_rule_id %}readonly aria-describedby="weekly-date-help"{% endif %} required>
+          {% if weekly_rule_id %}<small id="weekly-date-help" class="field-help">تاريخ المناسبة الأسبوعية ثابت في هذا النموذج.</small>{% endif %}
         </div>
 
         <div class="booking-field">
           <label for="start_time">وقت البداية</label>
           <select id="start_time" name="start_time" required>
             {% for time_value in start_time_options %}
-              <option value="{{ time_value }}" {{ 'selected' if form['start_time'] == time_value else '' }}>{{ time_value }}</option>
+              <option value="{{ time_value }}" {{ 'selected' if form['start_time'] == time_value else '' }}>{{ time_value|arabic_time }}</option>
             {% endfor %}
           </select>
         </div>
 
         <div class="booking-field">
           <label for="end_time">وقت النهاية</label>
-          <input id="end_time" type="time" value="{{ end_time }}" readonly aria-describedby="end-time-help">
+          <output id="end_time" class="time-readout" aria-live="polite" aria-describedby="end-time-help">{{ end_time|arabic_time }}</output>
           <small id="end-time-help" class="field-help">يتحدد حسب وقت البداية وعدد الساعات.</small>
         </div>
 
@@ -159,6 +169,12 @@
         + Number(form.dataset.cycleStart.split(':')[1]);
       const windowHours = Number(form.dataset.windowHours);
 
+      function formatArabicTime(hour, minute) {
+        const displayHour = hour % 12 || 12;
+        const period = hour < 12 ? 'ص' : 'م';
+        return `${displayHour}:${String(minute).padStart(2, '0')} ${period}`;
+      }
+
       function updateCalculatedFields() {
         const startHour = Number(start.value.split(':')[0]);
         const startMinute = Number(start.value.split(':')[1]);
@@ -178,9 +194,9 @@
           const endMinutes = (startMinutes + Number(duration.value) * 60) % 1440;
           const endHour = Math.floor(endMinutes / 60);
           const endMinute = endMinutes % 60;
-          end.value = `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`;
+          end.textContent = formatArabicTime(endHour, endMinute);
         } else {
-          end.value = '';
+          end.textContent = '';
         }
         const hourlyRate = Number(rate.value);
         const bookingTotal = Number.isFinite(hourlyRate) && maxDuration > 0

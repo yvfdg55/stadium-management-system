@@ -3,10 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>التقارير | إدارة الملعب</title>
+  <title>التقارير | Happy Family Resort</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   <link rel="stylesheet" href="{{ url_for('theme_css') }}">
   <script src="{{ url_for('static', filename='js/theme.js') }}" defer></script>
+  {% include '_pwa_head.html' %}
 </head>
 <body>
   {% include "_admin_nav.html" %}
@@ -17,9 +18,9 @@
       <div class="report-metric"><span>إجمالي المبالغ المدفوعة</span><strong>{{ '{:,}'.format(summary['total_paid']) }}</strong></div>
       <div class="report-metric"><span>إجمالي المبالغ المتبقية</span><strong>{{ '{:,}'.format(summary['total_remaining']) }}</strong></div>
       <div class="report-metric"><span>عدد الساعات المحجوزة</span><strong>{{ '{:,}'.format(summary['booked_hours']) }}</strong></div>
-      <div class="report-metric"><span>العربون المحصل</span><strong>{{ '{:,}'.format(summary['deposit_collected']) }}</strong></div>
-      <div class="report-metric"><span>العربون المسترد</span><strong>{{ '{:,}'.format(summary['deposit_refunded']) }}</strong></div>
-      <div class="report-metric"><span>العربون المحتفظ به</span><strong>{{ '{:,}'.format(summary['deposit_held']) }}</strong></div>
+      <div class="report-metric"><span>العربون المحصل خلال الفترة</span><strong>{{ '{:,}'.format(summary['deposit_collected']) }}</strong></div>
+      <div class="report-metric"><span>العربون المسترد خلال الفترة</span><strong>{{ '{:,}'.format(summary['deposit_refunded']) }}</strong></div>
+      <div class="report-metric"><span>رصيد العربون المحتفظ به حتى نهاية الفترة</span><strong>{{ '{:,}'.format(summary['deposit_held']) }}</strong></div>
     </div>
   {% endmacro %}
   {% macro finance_metrics(finance) %}
@@ -104,17 +105,90 @@
         </article>
       {% endif %}
     </section>
+
+    <section class="weekly-report-section" aria-labelledby="weekly-report-title">
+      <div class="section-heading weekly-report-heading">
+        <div>
+          <h2 id="weekly-report-title">تقرير الحجوزات الأسبوعية</h2>
+          <p class="muted compact">يعرض المناسبات الأسبوعية المسجلة ضمن الفترة، مع المبالغ المحصلة والمتبقية.</p>
+        </div>
+      </div>
+
+      <form class="form-card weekly-report-form" method="get" action="{{ url_for('admin_reports') }}">
+        <div class="booking-fields">
+          <div class="booking-field">
+            <label for="weekly_start">من تاريخ</label>
+            <input id="weekly_start" name="weekly_start" type="date" value="{{ weekly_start }}" required>
+          </div>
+          <div class="booking-field">
+            <label for="weekly_end">إلى تاريخ</label>
+            <input id="weekly_end" name="weekly_end" type="date" value="{{ weekly_end }}" required>
+          </div>
+          <div class="booking-field">
+            <label for="weekly_client">تصفية باسم العميل</label>
+            <input id="weekly_client" name="weekly_client" type="search" value="{{ weekly_client }}" maxlength="100" placeholder="اكتب اسم العميل أو جزءًا منه">
+          </div>
+        </div>
+        <div class="weekly-report-form-actions">
+          <button type="submit">عرض التقرير</button>
+          <a class="button-link secondary small" href="{{ url_for('admin_reports', weekly_start=weekly_start, weekly_end=weekly_end) }}">مسح فلتر العميل</a>
+        </div>
+      </form>
+
+      {% if weekly_error %}<div class="alert error" role="alert">{{ weekly_error }}</div>{% endif %}
+
+      <div class="weekly-report-summary" aria-label="ملخص الحجوزات الأسبوعية">
+        <div><span>عدد المناسبات</span><strong>{{ '{:,}'.format(weekly_report['occurrence_count']) }}</strong></div>
+        <div><span>إجمالي قيمة الحجوزات</span><strong>{{ '{:,}'.format(weekly_report['total_amount']) }}</strong></div>
+        <div><span>المحصل</span><strong>{{ '{:,}'.format(weekly_report['total_paid']) }}</strong></div>
+        <div><span>المتبقي</span><strong>{{ '{:,}'.format(weekly_report['total_remaining']) }}</strong></div>
+      </div>
+
+      {% if weekly_report['truncated'] %}
+        <div class="alert info" role="status">عدد النتائج يتجاوز 500 مناسبة؛ تظهر أحدث 500 نتيجة. استخدم فلتر العميل أو قلّص الفترة لعرض نتائج أدق.</div>
+      {% endif %}
+
+      {% if weekly_report['occurrences'] %}
+        <ul class="weekly-occurrence-list">
+          {% for occurrence in weekly_report['occurrences'] %}
+            <li>
+              <article class="weekly-occurrence-card">
+                <div class="weekly-occurrence-heading">
+                  <div>
+                    <h3>{{ occurrence['client_name'] }}</h3>
+                    <span class="weekly-occurrence-meta">{{ occurrence['weekday_name'] }} · قاعدة {{ occurrence['rule_status'] }}</span>
+                  </div>
+                  <time datetime="{{ occurrence['booking_date'] }}">{{ occurrence['booking_date'] }}</time>
+                </div>
+                <div class="weekly-occurrence-details">
+                  <span>{{ occurrence['start_time']|arabic_time }} – {{ occurrence['end_time']|arabic_time }}</span>
+                  <span>{{ occurrence['duration_hours'] }} ساعة</span>
+                  <span>{{ 'موعد أسبوعي معدّل' if occurrence['booking_type'] == 'single' else 'ضمن التكرار الأسبوعي' }}</span>
+                </div>
+                <div class="weekly-occurrence-finance">
+                  <div><span>قيمة الحجز</span><strong>{{ '{:,}'.format(occurrence['total']) }}</strong></div>
+                  <div><span>المدفوع</span><strong>{{ '{:,}'.format(occurrence['paid']) }}</strong></div>
+                  <div><span>المتبقي</span><strong>{{ '{:,}'.format(occurrence['remaining']) }}</strong></div>
+                </div>
+              </article>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <div class="empty-state weekly-report-empty" role="status"><p>لا توجد مناسبات أسبوعية مطابقة للفترة واسم العميل المحددين.</p></div>
+      {% endif %}
+    </section>
   </main>
   <script>
     (() => {
-      const customReportForm = document.querySelector('.custom-report-form');
-      let customPeriodChanged = false;
-      if (customReportForm) {
-        customReportForm.addEventListener('input', () => { customPeriodChanged = true; });
-        customReportForm.addEventListener('change', () => { customPeriodChanged = true; });
-      }
+      const reportForms = document.querySelectorAll('.custom-report-form, .weekly-report-form');
+      let reportFiltersChanged = false;
+      reportForms.forEach((form) => {
+        form.addEventListener('input', () => { reportFiltersChanged = true; });
+        form.addEventListener('change', () => { reportFiltersChanged = true; });
+      });
       window.setInterval(() => {
-        if (!customPeriodChanged && document.visibilityState === 'visible') {
+        if (!reportFiltersChanged && document.visibilityState === 'visible') {
           window.location.reload();
         }
       }, 60_000);

@@ -1,4 +1,5 @@
 <nav class="admin-context-nav" aria-label="تنقل الإدارة السريع">
+  <a class="admin-brand" href="{{ url_for('admin_home') }}"><img src="{{ url_for('static', filename='icons/icon-192.png') }}" alt=""><span>Happy Family Resort</span></a>
   <a href="{{ url_for('admin_home') }}">الرئيسية</a>
   <a href="{{ url_for('booking_screen') }}">الحجوزات</a>
   <a href="{{ url_for('clients_list') }}">العملاء</a>

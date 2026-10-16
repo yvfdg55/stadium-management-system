@@ -3,10 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>الإعدادات | إدارة الملعب</title>
+  <title>الإعدادات | Happy Family Resort</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   <link rel="stylesheet" href="{{ url_for('theme_css') }}">
   <script src="{{ url_for('static', filename='js/theme.js') }}" defer></script>
+  {% include '_pwa_head.html' %}
 </head>
 <body>
   {% include "_admin_nav.html" %}
@@ -70,8 +71,17 @@
           <label for="secondary_color">اللون الثانوي (تفاعل الأزرار)</label>
           <input id="secondary_color" name="secondary_color" type="color" value="{{ settings['secondary_color'] }}" required>
         </div>
+        <div class="notes-field settings-color-heading">
+          <h2>سياسة الملعب للعملاء</h2>
+          <p class="field-help">يجب على العميل قراءة السياسة والإقرار بالموافقة قبل ظهور المواعيد. إذا تُرك النص فارغًا، سيظل جدول العملاء محجوبًا.</p>
+        </div>
+        <div class="booking-field notes-field">
+          <label for="venue_policy">نص سياسة الملعب (حتى 8000 حرف)</label>
+          <textarea id="venue_policy" name="venue_policy" rows="9" maxlength="8000" aria-describedby="venue-policy-help">{{ settings['venue_policy'] }}</textarea>
+          <p id="venue-policy-help" class="field-help">اكتب النص المعتمد الذي تريد من العملاء قراءته والموافقة عليه.</p>
+        </div>
       </div>
-      <p class="settings-help">إذا كان وقت النهاية مساويًا للبداية، يكون التشغيل 24 ساعة. وإذا كان وقت النهاية أسبق من البداية، تنتهي دورة التشغيل في اليوم التالي. مثال: 10:00 إلى 10:00 تعني من العاشرة صباحًا حتى العاشرة صباح اليوم التالي.</p>
+      <p class="settings-help">إذا كان وقت النهاية مساويًا للبداية، يكون التشغيل 24 ساعة. وإذا كان وقت النهاية أسبق من البداية، تنتهي دورة التشغيل في اليوم التالي. مثال: 10:00 ص إلى 10:00 ص تعني دورة تشغيل كاملة تنتهي في اليوم التالي.</p>
       <button type="submit">حفظ الإعدادات</button>
     </form>
   </main>

@@ -2,9 +2,10 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{ page_title }} | إدارة الملعب</title>
+  <title>{{ page_title }} | Happy Family Resort</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}"><link rel="stylesheet" href="{{ url_for('theme_css') }}">
   <script src="{{ url_for('static', filename='js/theme.js') }}" defer></script>
+  {% include '_pwa_head.html' %}
 </head>
 <body>
   {% include "_admin_nav.html" %}
@@ -14,6 +15,7 @@
       <div class="client-detail-actions"><a class="button-link" href="{{ url_for(new_endpoint) }}">إضافة سجل</a><a class="button-link secondary" href="{{ url_for('admin_home') }}">الرئيسية</a></div>
     </header>
     {% with messages = get_flashed_messages(with_categories=true) %}{% for category, message in messages %}<div class="alert {{ category }}" role="status">{{ message }}</div>{% endfor %}{% endwith %}
+    {% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
     <form class="form-card finance-filter" method="get">
       <div class="booking-fields">
         <div class="booking-field"><label for="q">بحث</label><input id="q" name="q" type="search" value="{{ query }}" placeholder="النوع أو الوصف أو الملاحظات"></div>

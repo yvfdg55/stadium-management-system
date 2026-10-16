@@ -3,10 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>سجل العميل | إدارة الملعب</title>
+  <title>سجل العميل | Happy Family Resort</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   <link rel="stylesheet" href="{{ url_for('theme_css') }}">
   <script src="{{ url_for('static', filename='js/theme.js') }}" defer></script>
+  {% include '_pwa_head.html' %}
 </head>
 <body>
   {% include "_admin_nav.html" %}
@@ -55,7 +56,7 @@
             <header class="client-booking-heading">
               <div>
                 <h3>{{ booking['date_label'] }}</h3>
-                <p>{{ booking['start_time'] }} - {{ booking['end_time'] }}</p>
+                <p>{{ booking['start_time']|arabic_time }} - {{ booking['end_time']|arabic_time }}</p>
               </div>
               <span class="booking-status {{ 'active-status' if booking['status'] == 'active' else 'cancelled-status' }}">{{ booking['status_label'] }}</span>
             </header>

@@ -1,18 +1,29 @@
-import calendar
+import hashlib
 import hmac
 import os
 import re
 import secrets
 import sqlite3
 import time
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta, timezone
 from functools import wraps
 from pathlib import Path
 
 from dotenv import load_dotenv
-from flask import Flask, Response, abort, flash, g, redirect, render_template, request, session, url_for
-from werkzeug.security import check_password_hash, generate_password_hash
+from flask import (
+    Flask,
+    Response,
+    abort,
+    flash,
+    g,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
 from werkzeug.middleware.proxy_fix import ProxyFix
+from werkzeug.security import check_password_hash, generate_password_hash
 
 BASE_DIR = Path(__file__).resolve().parent
 ENV_PATH = BASE_DIR / ".env"
@@ -27,20 +38,44 @@ DATABASE_PATH = Path(os.getenv("DATABASE_PATH", BASE_DIR / "instance" / "stadium
 SECRET_KEY = os.getenv("SECRET_KEY", "")
 if len(SECRET_KEY) < 32 or SECRET_KEY.startswith("replace-"):
     raise RuntimeError("Set SECRET_KEY to a unique random value of at least 32 characters.")
+MAX_SQLITE_INTEGER = 2**63 - 1
+# Per-value guardrail: generous for venue accounting while protecting SQLite aggregates.
+MAX_FINANCIAL_AMOUNT = 1_000_000_000_000
 HOURLY_RATE = int(os.getenv("HOURLY_RATE", "10000"))
+if not 0 <= HOURLY_RATE <= MAX_FINANCIAL_AMOUNT:
+    raise RuntimeError("HOURLY_RATE must be between 0 and MAX_FINANCIAL_AMOUNT.")
 DEFAULT_SETTINGS = {
-    "venue_name": "الملعب",
+    "venue_name": "Happy Family Resort",
     "venue_phone": "",
     "venue_address": "",
+    "venue_policy": "",
     "hourly_rate": str(HOURLY_RATE),
     "work_start": "10:00",
     "work_end": "10:00",
     "booking_duration": "1",
+    "primary_color": "#237447",
+    "secondary_color": "#d64b27",
+}
+LEGACY_BRAND_DEFAULTS = {
+    "venue_name": "الملعب",
     "primary_color": "#2563eb",
     "secondary_color": "#1d4ed8",
 }
 
 app = Flask(__name__)
+def resolve_trusted_hosts(raw_value, environment):
+    hosts = [host.strip() for host in raw_value.split(",") if host.strip()]
+    if environment.strip().lower() in {"prod", "production"} and not hosts:
+        raise RuntimeError("Set TRUSTED_HOSTS to the exact public hostnames before production startup.")
+    if environment.strip().lower() in {"prod", "production"} and any(
+        "*" in host or "://" in host or "/" in host for host in hosts
+    ):
+        raise RuntimeError("TRUSTED_HOSTS must contain exact hostnames, not wildcards or URLs.")
+    return hosts or None
+
+
+APP_ENV = os.getenv("APP_ENV", "development")
+TRUSTED_HOSTS = resolve_trusted_hosts(os.getenv("TRUSTED_HOSTS", ""), APP_ENV)
 app.config.update(
     SECRET_KEY=SECRET_KEY,
     DATABASE=str(DATABASE_PATH),
@@ -49,7 +84,7 @@ app.config.update(
     SESSION_COOKIE_SAMESITE="Lax",
     PERMANENT_SESSION_LIFETIME=timedelta(minutes=30),
     MAX_CONTENT_LENGTH=1024 * 1024,
-    TRUSTED_HOSTS=[host.strip() for host in os.getenv("TRUSTED_HOSTS", "").split(",") if host.strip()] or None,
+    TRUSTED_HOSTS=TRUSTED_HOSTS,
 )
 TRUSTED_PROXY_HOPS = int(os.getenv("TRUSTED_PROXY_HOPS", "0"))
 if TRUSTED_PROXY_HOPS:
@@ -143,6 +178,30 @@ def format_clock(minutes):
     return f"{minutes // 60:02d}:{minutes % 60:02d}"
 
 
+def format_arabic_time(value):
+    try:
+        parsed = datetime.strptime(value, "%H:%M")
+    except (TypeError, ValueError):
+        return value or ""
+    hour = parsed.hour % 12 or 12
+    period = "ص" if parsed.hour < 12 else "م"
+    return f"{hour}:{parsed.minute:02d} {period}"
+
+
+def format_local_timestamp(value):
+    """Convert SQLite's UTC timestamp into the configured fixed app timezone."""
+    if not value:
+        return ""
+    try:
+        parsed = datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+    except (TypeError, ValueError):
+        return value
+    return parsed.replace(tzinfo=UTC).astimezone(APP_TIMEZONE).strftime("%Y-%m-%d %H:%M")
+
+
+app.jinja_env.filters["arabic_time"] = format_arabic_time
+
+
 def work_window(settings=None):
     settings = settings or get_app_settings()
     start_minutes = clock_minutes(settings["work_start"])
@@ -151,6 +210,25 @@ def work_window(settings=None):
     if duration_minutes == 0:
         duration_minutes = 24 * 60
     return start_minutes, duration_minutes
+
+
+def has_schedule_outside_work_window(db, start_minutes, window_minutes):
+    """Whether an active booking or rule would be hidden by this work window."""
+    bookings = db.execute(
+        "SELECT start_time, duration_hours FROM bookings WHERE status = 'active'"
+    ).fetchall()
+    rules = db.execute(
+        "SELECT start_time, duration_hours FROM recurring_booking_rules WHERE active = 1"
+    ).fetchall()
+    for item in [*bookings, *rules]:
+        try:
+            offset = cycle_offset(item["start_time"], start_minutes)
+            duration = int(item["duration_hours"])
+        except (TypeError, ValueError):
+            return True
+        if offset >= window_minutes or duration < 1 or duration > (window_minutes - offset) // 60:
+            return True
+    return False
 
 
 def cycle_offset(value, cycle_start_minutes):
@@ -407,6 +485,11 @@ def init_db():
         "INSERT OR IGNORE INTO app_settings (setting_key, setting_value) VALUES (?, ?)",
         tuple(DEFAULT_SETTINGS.items()),
     )
+    for key, legacy_value in LEGACY_BRAND_DEFAULTS.items():
+        db.execute(
+            "UPDATE app_settings SET setting_value = ? WHERE setting_key = ? AND setting_value = ?",
+            (DEFAULT_SETTINGS[key], key, legacy_value),
+        )
     admin = db.execute("SELECT id, password_hash FROM admins LIMIT 1").fetchone()
     if admin is None:
         admin_username = os.getenv("ADMIN_USERNAME", "admin").strip()
@@ -520,6 +603,10 @@ def get_payment_page(booking_id, error=None, amount="", status=200):
         "WHERE booking_id = ? ORDER BY paid_at DESC, id DESC",
         (booking_id,),
     ).fetchall()
+    payments = [
+        {**dict(payment), "paid_at_local": format_local_timestamp(payment["paid_at"])}
+        for payment in payments
+    ]
     return render_template(
         "booking_payments.html",
         booking=booking,
@@ -530,7 +617,6 @@ def get_payment_page(booking_id, error=None, amount="", status=200):
 
 
 def get_booking_report_summary(start_date, end_date):
-    work_start = get_app_settings()["work_start"]
     row = get_db().execute(
         """
         SELECT COUNT(*) AS booking_count,
@@ -545,26 +631,35 @@ def get_booking_report_summary(start_date, end_date):
             GROUP BY booking_id
         ) AS p ON p.booking_id = b.id
         WHERE b.status = 'active'
-          AND CASE WHEN b.start_time < ?
-                   THEN date(b.booking_date, '-1 day')
-                   ELSE b.booking_date END >= ?
-          AND CASE WHEN b.start_time < ?
-                   THEN date(b.booking_date, '-1 day')
-                   ELSE b.booking_date END <= ?
+          AND b.booking_date >= ?
+          AND b.booking_date <= ?
         """,
-        (work_start, start_date, work_start, end_date),
+        (start_date, end_date),
     ).fetchone()
     summary = dict(row)
+    offset_hours = int(APP_TIMEZONE.utcoffset(None).total_seconds() // 3600)
+    local_time_modifier = f"{offset_hours:+d} hours"
     deposit = get_db().execute(
         """
-        SELECT COALESCE(SUM(CASE WHEN transaction_type = 'collect' THEN amount ELSE 0 END), 0) AS deposit_collected,
-               COALESCE(SUM(CASE WHEN transaction_type = 'refund' THEN amount ELSE 0 END), 0) AS deposit_refunded
-        FROM recurring_deposit_transactions
-        WHERE date(created_at) >= ? AND date(created_at) <= ?
-        """, (start_date, end_date)
+        WITH local_transactions AS (
+            SELECT transaction_type, amount,
+                   date(datetime(created_at, ?)) AS local_date
+            FROM recurring_deposit_transactions
+        )
+        SELECT COALESCE(SUM(CASE WHEN transaction_type = 'collect'
+                                      AND local_date >= ? AND local_date <= ?
+                                 THEN amount ELSE 0 END), 0) AS deposit_collected,
+               COALESCE(SUM(CASE WHEN transaction_type = 'refund'
+                                      AND local_date >= ? AND local_date <= ?
+                                 THEN amount ELSE 0 END), 0) AS deposit_refunded,
+               COALESCE(SUM(CASE WHEN transaction_type = 'collect' AND local_date <= ?
+                                 THEN amount
+                                 WHEN transaction_type = 'refund' AND local_date <= ?
+                                 THEN -amount ELSE 0 END), 0) AS deposit_held
+        FROM local_transactions
+        """, (local_time_modifier, start_date, end_date, start_date, end_date, end_date, end_date)
     ).fetchone()
     summary.update(dict(deposit))
-    summary["deposit_held"] = summary["deposit_collected"] - summary["deposit_refunded"]
     return summary
 
 
@@ -699,6 +794,7 @@ def render_booking_form(booking=None, booking_id=None, form_values=None, error=N
     return render_template(
         "booking_form.html",
         booking_id=booking_id,
+        weekly_rule_id=(booking or {}).get("weekly_rule_id"),
         form=values,
         end_time=end_time,
         total=total,
@@ -724,7 +820,7 @@ def parse_booking_form(form):
         hourly_rate = int(form.get("hourly_rate", ""))
         duration_hours = int(form.get("duration_hours", ""))
         initial_payment = int(form.get("initial_payment", "0") or 0)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         raise ValueError("أكمل الحقول المطلوبة واختر تاريخًا ووقتًا صحيحين.")
 
     if client_id < 1:
@@ -738,12 +834,18 @@ def parse_booking_form(form):
         raise ValueError("عدد الساعات يجب أن يكون ساعة واحدة على الأقل.")
     if hourly_rate < 0:
         raise ValueError("سعر الساعة لا يمكن أن يكون سالبًا.")
-    total = hourly_rate * duration_hours
-    if initial_payment < 0 or initial_payment > total:
-        raise ValueError("قيمة العربون لا يمكن أن تكون سالبة أو تتجاوز إجمالي الحجز.")
+    if hourly_rate > MAX_FINANCIAL_AMOUNT:
+        raise ValueError(f"سعر الساعة يتجاوز الحد الأقصى المسموح ({MAX_FINANCIAL_AMOUNT:,}).")
+    if initial_payment > MAX_FINANCIAL_AMOUNT:
+        raise ValueError(f"قيمة الدفعة الأولية تتجاوز الحد الأقصى المسموح ({MAX_FINANCIAL_AMOUNT:,}).")
     maximum_duration = (window_minutes - start_offset) // 60
     if duration_hours > maximum_duration:
         raise ValueError("مدة الحجز تتجاوز نهاية دورة عمل الملعب.")
+    total = hourly_rate * duration_hours
+    if total > MAX_SQLITE_INTEGER:
+        raise ValueError("إجمالي الحجز يتجاوز الحد الذي يمكن تخزينه بأمان.")
+    if initial_payment < 0 or initial_payment > total:
+        raise ValueError("قيمة العربون لا يمكن أن تكون سالبة أو تتجاوز إجمالي الحجز.")
     end_time = format_clock(clock_minutes(start.strftime("%H:%M")) + duration_hours * 60)
 
     return {
@@ -763,16 +865,26 @@ def save_booking(values, booking_id=None):
     db = get_db()
     db.execute("BEGIN IMMEDIATE")
     try:
+        current_weekly_rule_id = None
+        current_booking_type = None
+        current_booking_date = None
         client = db.execute("SELECT id FROM clients WHERE id = ?", (values["client_id"],)).fetchone()
         if client is None:
             raise ValueError("العميل المحدد غير موجود.")
 
         if booking_id is not None:
             current = db.execute(
-                "SELECT id FROM bookings WHERE id = ? AND status = 'active'", (booking_id,)
+                "SELECT id, weekly_rule_id, booking_type, booking_date FROM bookings "
+                "WHERE id = ? AND status = 'active'",
+                (booking_id,),
             ).fetchone()
             if current is None:
                 raise ValueError("الحجز غير موجود أو تم إلغاؤه بالفعل.")
+            current_weekly_rule_id = current["weekly_rule_id"]
+            current_booking_type = current["booking_type"]
+            current_booking_date = current["booking_date"]
+            if current_weekly_rule_id is not None and values["booking_date"] != current_booking_date:
+                raise ValueError("لا يمكن نقل مناسبة أسبوعية إلى تاريخ آخر. ألغِ هذه المناسبة وأنشئ حجزًا عاديًا بالتاريخ الجديد.")
             paid = db.execute(
                 "SELECT COALESCE(SUM(amount), 0) AS paid FROM booking_payments WHERE booking_id = ?",
                 (booking_id,),
@@ -799,6 +911,20 @@ def save_booking(values, booking_id=None):
             if new_start_offset < existing_end and new_end_offset > existing_start:
                 raise BookingConflict("هذا الوقت يتعارض مع حجز آخر. اختر وقتًا مختلفًا.")
 
+        booking_weekday = date.fromisoformat(values["booking_date"]).weekday()
+        weekly_rules = db.execute(
+            "SELECT id, start_time, duration_hours FROM recurring_booking_rules "
+            "WHERE active = 1 AND weekday = ?",
+            (booking_weekday,),
+        ).fetchall()
+        for rule in weekly_rules:
+            if current_weekly_rule_id is not None and rule["id"] == current_weekly_rule_id:
+                continue
+            recurring_start = cycle_offset(rule["start_time"], cycle_start_minutes)
+            recurring_end = recurring_start + rule["duration_hours"] * 60
+            if new_start_offset < recurring_end and new_end_offset > recurring_start:
+                raise BookingConflict("هذا الوقت محجوز أسبوعيًا. اختر وقتًا مختلفًا.")
+
         if booking_id is None:
             cursor = db.execute(
                 """
@@ -824,14 +950,16 @@ def save_booking(values, booking_id=None):
                 """
                 UPDATE bookings
                 SET client_id = ?, booking_date = ?, start_time = ?, end_time = ?,
-                    hourly_rate = ?, duration_hours = ?, total = ?, notes = ?,
+                    hourly_rate = ?, duration_hours = ?, total = ?, notes = ?, booking_type = ?,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = ? AND status = 'active'
                 """,
                 (
                     values["client_id"], values["booking_date"], values["start_time"],
                     values["end_time"], values["hourly_rate"], values["duration_hours"],
-                    values["total"], values["notes"], booking_id,
+                    values["total"], values["notes"],
+                    "single" if current_weekly_rule_id is not None else current_booking_type,
+                    booking_id,
                 ),
             )
             saved_id = booking_id
@@ -1029,6 +1157,7 @@ def settings_page():
         "venue_name": request.form.get("venue_name", "").strip(),
         "venue_phone": request.form.get("venue_phone", "").strip(),
         "venue_address": request.form.get("venue_address", "").strip(),
+        "venue_policy": request.form.get("venue_policy", "").strip(),
         "hourly_rate": request.form.get("hourly_rate", "").strip(),
         "work_start": request.form.get("work_start", "").strip(),
         "work_end": request.form.get("work_end", "").strip(),
@@ -1048,11 +1177,15 @@ def settings_page():
     try:
         if not values["venue_name"]:
             raise ValueError("اسم الملعب مطلوب.")
+        if len(values["venue_policy"]) > 8000:
+            raise ValueError("سياسة الملعب طويلة جدًا؛ الحد الأقصى 8000 حرف.")
         if any(not re.fullmatch(r"#[0-9a-fA-F]{6}", values[key])
                for key in ("primary_color", "secondary_color")):
             raise ValueError("اختر ألوانًا صالحة من منتقي الألوان.")
         if hourly_rate < 0:
             raise ValueError("سعر الساعة لا يمكن أن يكون سالبًا.")
+        if hourly_rate > MAX_FINANCIAL_AMOUNT:
+            raise ValueError(f"سعر الساعة يتجاوز الحد الأقصى المسموح ({MAX_FINANCIAL_AMOUNT:,}).")
         if booking_duration < 1 or booking_duration > 24:
             raise ValueError("مدة الحجز الافتراضية يجب أن تكون بين ساعة و24 ساعة.")
         start_time = datetime.strptime(values["work_start"], "%H:%M")
@@ -1064,6 +1197,13 @@ def settings_page():
         window_minutes = (end_minutes - start_minutes) % (24 * 60) or 24 * 60
         if booking_duration > window_minutes // 60:
             raise ValueError("مدة الحجز الافتراضية لا يمكن أن تتجاوز ساعات التشغيل.")
+        current_settings = get_app_settings()
+        work_window_changed = (
+            start_time.strftime("%H:%M") != current_settings["work_start"]
+            or end_time.strftime("%H:%M") != current_settings["work_end"]
+        )
+        if work_window_changed and has_schedule_outside_work_window(get_db(), start_minutes, window_minutes):
+            raise ValueError("لا يمكن تغيير ساعات التشغيل لأن حجزًا نشطًا أو قاعدة أسبوعية ستصبح خارج ساعات العمل الجديدة. عدّل المواعيد أو أوقف القاعدة أولًا.")
         values["hourly_rate"] = str(hourly_rate)
         values["booking_duration"] = str(booking_duration)
         values["work_start"] = start_time.strftime("%H:%M")
@@ -1096,6 +1236,78 @@ def theme_css():
     response = Response(css, mimetype="text/css")
     response.headers["Cache-Control"] = "no-store"
     return response
+
+
+@app.route("/service-worker.js", methods=["GET"])
+def service_worker():
+    response = Response(
+        (BASE_DIR / "static" / "service-worker.js").read_text(encoding="utf-8"),
+        mimetype="application/javascript",
+    )
+    response.headers["Service-Worker-Allowed"] = "/"
+    response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
+def get_weekly_booking_report(start_date, end_date, client_filter=""):
+    """Return active weekly-linked occurrences in a date range, optionally by client."""
+    where = [
+        "b.status = 'active'",
+        "b.weekly_rule_id IS NOT NULL",
+        "b.booking_date >= ?",
+        "b.booking_date <= ?",
+    ]
+    params = [start_date, end_date]
+    if client_filter:
+        where.append("c.name LIKE ?")
+        params.append(f"%{client_filter}%")
+    where_sql = " AND ".join(where)
+    db = get_db()
+    joined_tables = """
+        FROM bookings AS b
+        JOIN clients AS c ON c.id = b.client_id
+        JOIN recurring_booking_rules AS r ON r.id = b.weekly_rule_id
+        LEFT JOIN (
+            SELECT booking_id, SUM(amount) AS paid
+            FROM booking_payments
+            GROUP BY booking_id
+        ) AS p ON p.booking_id = b.id
+    """
+    summary = db.execute(
+        f"""
+        SELECT COUNT(*) AS occurrence_count,
+               COALESCE(SUM(b.total), 0) AS total_amount,
+               COALESCE(SUM(COALESCE(p.paid, 0)), 0) AS total_paid,
+               COALESCE(SUM(b.total - COALESCE(p.paid, 0)), 0) AS total_remaining
+        {joined_tables}
+        WHERE {where_sql}
+        """,
+        params,
+    ).fetchone()
+    rows = db.execute(
+        f"""
+        SELECT b.id, b.booking_date, b.start_time, b.end_time, b.booking_type,
+               b.duration_hours, b.total, COALESCE(p.paid, 0) AS paid,
+               c.name AS client_name, r.weekday, r.active AS rule_active
+        {joined_tables}
+        WHERE {where_sql}
+        ORDER BY b.booking_date DESC, b.start_time ASC, b.id DESC
+        LIMIT 500
+        """,
+        params,
+    ).fetchall()
+    weekday_names = ["الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد"]
+    occurrences = []
+    for row in rows:
+        item = dict(row)
+        item["remaining"] = item["total"] - item["paid"]
+        item["weekday_name"] = weekday_names[item["weekday"]]
+        item["rule_status"] = "نشطة" if item["rule_active"] else "موقوفة"
+        occurrences.append(item)
+    result = dict(summary)
+    result["occurrences"] = occurrences
+    result["truncated"] = result["occurrence_count"] > len(occurrences)
+    return result
 
 
 @app.route("/admin/reports", methods=["GET"])
@@ -1135,6 +1347,37 @@ def admin_reports():
             except ValueError:
                 error = "أدخل تاريخًا صحيحًا للبداية والنهاية."
 
+    weekly_start_input = request.args.get("weekly_start", "").strip()
+    weekly_end_input = request.args.get("weekly_end", "").strip()
+    weekly_start = weekly_start_input or month_start.isoformat()
+    weekly_end = weekly_end_input or stadium_today.isoformat()
+    weekly_client = request.args.get("weekly_client", "").strip()[:100]
+    weekly_error = None
+    weekly_report = {
+        "occurrence_count": 0,
+        "total_amount": 0,
+        "total_paid": 0,
+        "total_remaining": 0,
+        "occurrences": [],
+        "truncated": False,
+    }
+    if weekly_start_input or weekly_end_input:
+        if not weekly_start_input or not weekly_end_input:
+            weekly_error = "اختر تاريخ بداية ونهاية لكشف الحجوزات الأسبوعية."
+        else:
+            try:
+                weekly_start_day = datetime.strptime(weekly_start, "%Y-%m-%d").date()
+                weekly_end_day = datetime.strptime(weekly_end, "%Y-%m-%d").date()
+                if weekly_start_day > weekly_end_day:
+                    weekly_error = "تاريخ بداية كشف الحجوزات الأسبوعية يجب ألا يتجاوز تاريخ النهاية."
+                else:
+                    weekly_start = weekly_start_day.isoformat()
+                    weekly_end = weekly_end_day.isoformat()
+            except ValueError:
+                weekly_error = "أدخل تاريخًا صحيحًا لكشف الحجوزات الأسبوعية."
+    if not weekly_error:
+        weekly_report = get_weekly_booking_report(weekly_start, weekly_end, weekly_client)
+
     return render_template(
         "reports.html",
         today_label=f"{stadium_today.strftime('%d/%m/%Y')} · {cycle_description}",
@@ -1157,8 +1400,13 @@ def admin_reports():
         custom_label=custom_label,
         custom_start=custom_start or month_start.isoformat(),
         custom_end=custom_end or stadium_today.isoformat(),
+        weekly_start=weekly_start,
+        weekly_end=weekly_end,
+        weekly_client=weekly_client,
+        weekly_report=weekly_report,
+        weekly_error=weekly_error,
         error=error,
-    ), 400 if error else 200
+    ), 400 if error or weekly_error else 200
 
 
 def build_booking_slots(selected_day, settings):
@@ -1193,9 +1441,11 @@ def build_booking_slots(selected_day, settings):
         if booking["status"] == "cancelled":
             booking["card_state"] = "cancelled"
             booking["status_label"] = "ملغى"
-        elif booking.get("booking_type") == "recurring":
+        elif booking.get("booking_type") == "recurring" or booking.get("weekly_rule_id") is not None:
             booking["card_state"] = "recurring"
-            booking["status_label"] = "متكرر"
+            booking["status_label"] = (
+                "متكرر" if booking.get("booking_type") == "recurring" else "موعد أسبوعي معدّل"
+            )
         elif booking["paid"] < booking["total"]:
             booking["card_state"] = "deposit"
             booking["status_label"] = "عربون"
@@ -1227,14 +1477,22 @@ def build_public_slots(selected_day, settings):
     db = get_db()
     cycle_start_minutes, window_minutes = work_window(settings)
     window_hours = window_minutes // 60
+    materialized_rule_ids = {
+        row["weekly_rule_id"]
+        for row in db.execute(
+            "SELECT DISTINCT weekly_rule_id FROM bookings "
+            "WHERE booking_date = ? AND weekly_rule_id IS NOT NULL",
+            (selected_day.isoformat(),),
+        ).fetchall()
+    }
     rows = db.execute(
-        "SELECT b.start_time, b.duration_hours, b.booking_type, c.name AS client_name "
+        "SELECT b.start_time, b.duration_hours, b.booking_type, b.weekly_rule_id, c.name AS client_name "
         "FROM bookings AS b JOIN clients AS c ON c.id = b.client_id "
         "WHERE b.booking_date = ? AND b.status = 'active' ORDER BY b.start_time, b.id",
         (selected_day.isoformat(),),
     ).fetchall()
     recurring_rules = db.execute(
-        "SELECT r.start_time, r.duration_hours, c.name AS client_name "
+        "SELECT r.id, r.start_time, r.duration_hours, c.name AS client_name "
         "FROM recurring_booking_rules AS r JOIN clients AS c ON c.id = r.client_id "
         "WHERE r.weekday = ? AND r.active = 1 ORDER BY r.start_time, r.id",
         (selected_day.weekday(),),
@@ -1244,10 +1502,12 @@ def build_public_slots(selected_day, settings):
         occupied.append({
             "start": cycle_offset(row["start_time"], cycle_start_minutes) // 60,
             "duration": row["duration_hours"],
-            "state": "fixed" if row["booking_type"] == "recurring" else "booked",
+            "state": "fixed" if row["booking_type"] == "recurring" or row["weekly_rule_id"] is not None else "booked",
             "client_name": row["client_name"],
         })
     for row in recurring_rules:
+        if row["id"] in materialized_rule_ids:
+            continue
         occupied.append({
             "start": cycle_offset(row["start_time"], cycle_start_minutes) // 60,
             "duration": row["duration_hours"],
@@ -1271,15 +1531,15 @@ def build_public_slots(selected_day, settings):
             if item["state"] == state and item.get("client_name")
         ))
         slots.append({
-            "start": format_clock(cycle_start_minutes + slot_offset * 60),
-            "end": format_clock(cycle_start_minutes + (slot_offset + 1) * 60),
+            "start": format_arabic_time(format_clock(cycle_start_minutes + slot_offset * 60)),
+            "end": format_arabic_time(format_clock(cycle_start_minutes + (slot_offset + 1) * 60)),
             "state": state,
             "client_names": client_names,
         })
     return slots
 
 
-@app.route("/public-schedule", methods=["GET"])
+@app.route("/public-schedule", methods=["GET", "POST"])
 def public_schedule():
     settings = get_app_settings()
     today = stadium_business_date(settings=settings)
@@ -1297,7 +1557,7 @@ def public_schedule():
             "label": f"{current.day} {month_names[current.month - 1]}",
             "is_today": offset == 0,
         })
-    selected_value = request.args.get("date", today.isoformat())
+    selected_value = request.values.get("date", today.isoformat())
     try:
         selected_day = datetime.strptime(selected_value, "%Y-%m-%d").date()
     except ValueError:
@@ -1308,13 +1568,52 @@ def public_schedule():
     selected_date = selected_day.isoformat()
     venue_phone = settings.get("venue_phone", "").strip()
     whatsapp_number = re.sub(r"\D", "", venue_phone)
+    page_context = {
+        "venue_name": settings["venue_name"],
+        "venue_phone": venue_phone,
+        "whatsapp_number": whatsapp_number,
+        "days": days,
+        "selected_date": selected_date,
+    }
+    policy_text = settings.get("venue_policy", "").strip()
+    if not policy_text:
+        session.pop("customer_policy_ack", None)
+        return render_template(
+            "public_schedule.html",
+            policy_state="unconfigured",
+            policy_text="",
+            policy_error=None,
+            **page_context,
+        )
+
+    policy_version = hashlib.sha256(policy_text.encode("utf-8")).hexdigest()
+    if request.method == "POST":
+        if request.form.get("accept_policy") != "yes":
+            return render_template(
+                "public_schedule.html",
+                policy_state="consent",
+                policy_text=policy_text,
+                policy_error="يرجى الإقرار بقراءة سياسة الملعب والموافقة عليها للمتابعة.",
+                **page_context,
+            ), 400
+        session["customer_policy_ack"] = policy_version
+        return redirect(url_for("public_schedule", date=selected_date))
+
+    if session.get("customer_policy_ack") != policy_version:
+        return render_template(
+            "public_schedule.html",
+            policy_state="consent",
+            policy_text=policy_text,
+            policy_error=None,
+            **page_context,
+        )
+
     return render_template(
         "public_schedule.html",
-        venue_name=settings["venue_name"],
-        venue_phone=venue_phone,
-        whatsapp_number=whatsapp_number,
-        days=days,
-        selected_date=selected_date,
+        policy_state="schedule",
+        policy_text=policy_text,
+        policy_error=None,
+        **page_context,
         slots=build_public_slots(selected_day, settings),
     )
 
@@ -1364,7 +1663,7 @@ def booking_screen():
     if selected_day not in valid_days:
         selected_day = range_start
 
-    slots, window_hours, cycle_start_minutes = build_booking_slots(selected_day, settings)
+    slots, _window_hours, cycle_start_minutes = build_booking_slots(selected_day, settings)
     cycle_start_minutes, window_minutes = work_window(settings)
     cycle_end_minutes = cycle_start_minutes + window_minutes
     return render_template(
@@ -1402,23 +1701,93 @@ def booking_new():
     return redirect(url_for("booking_hours", date=values["booking_date"]))
 
 
+def next_recurring_occurrence_date(weekday, start_time, settings):
+    """Return the next business date on which this weekly time has not passed."""
+    first_day = stadium_business_date(settings=settings)
+    days_until = (weekday - first_day.weekday()) % 7
+    if days_until == 0:
+        cycle_start_minutes, _ = work_window(settings)
+        now = app_now()
+        current_offset = cycle_offset(now.strftime("%H:%M"), cycle_start_minutes)
+        start_offset = cycle_offset(start_time, cycle_start_minutes)
+        if start_offset <= current_offset:
+            days_until = 7
+    return first_day + timedelta(days=days_until)
+
+
+def recurring_rule_conflict_message(db, rule, exclude_rule_id=None, settings=None):
+    """Describe the first active schedule conflict, or return None when clear."""
+    settings = settings or get_app_settings()
+    cycle_start_minutes, window_minutes = work_window(settings)
+    try:
+        start_offset = cycle_offset(rule["start_time"], cycle_start_minutes)
+        duration_hours = int(rule["duration_hours"])
+        weekday = int(rule["weekday"])
+    except (KeyError, TypeError, ValueError):
+        return "بيانات وقت أو مدة الحجز الأسبوعي غير صحيحة."
+    if start_offset >= window_minutes or duration_hours < 1 or duration_hours > (window_minutes - start_offset) // 60:
+        return "موعد الحجز الأسبوعي خارج ساعات عمل الملعب أو يتجاوز نهايتها."
+
+    rule_query = (
+        "SELECT id, start_time, duration_hours FROM recurring_booking_rules "
+        "WHERE active = 1 AND weekday = ?"
+    )
+    rule_params = [weekday]
+    if exclude_rule_id is not None:
+        rule_query += " AND id != ?"
+        rule_params.append(exclude_rule_id)
+    new_end_offset = start_offset + duration_hours * 60
+    for other in db.execute(rule_query, rule_params).fetchall():
+        other_start = cycle_offset(other["start_time"], cycle_start_minutes)
+        other_end = other_start + other["duration_hours"] * 60
+        if start_offset < other_end and new_end_offset > other_start:
+            return "يتعارض هذا الوقت مع قاعدة حجز أسبوعية نشطة أخرى في اليوم نفسه."
+
+    first_date = next_recurring_occurrence_date(weekday, rule["start_time"], settings)
+    booking_query = (
+        "SELECT booking_date, start_time, duration_hours, weekly_rule_id FROM bookings "
+        "WHERE status = 'active' AND booking_date >= ?"
+    )
+    booking_params = [first_date.isoformat()]
+    if exclude_rule_id is not None:
+        booking_query += " AND (weekly_rule_id IS NULL OR weekly_rule_id != ?)"
+        booking_params.append(exclude_rule_id)
+    booking_query += " ORDER BY booking_date, start_time, id"
+    for existing in db.execute(booking_query, booking_params).fetchall():
+        try:
+            existing_date = date.fromisoformat(existing["booking_date"])
+        except (TypeError, ValueError):
+            continue
+        if existing_date.weekday() != weekday:
+            continue
+        existing_start = cycle_offset(existing["start_time"], cycle_start_minutes)
+        existing_end = existing_start + existing["duration_hours"] * 60
+        if start_offset < existing_end and new_end_offset > existing_start:
+            return f"يتعارض الموعد الأسبوعي مع حجز قائم بتاريخ {existing_date.isoformat()}."
+    return None
+
+
 def materialize_recurring_rule(db, rule_id, weeks=52):
     rule = db.execute(
         "SELECT * FROM recurring_booking_rules WHERE id = ? AND active = 1", (rule_id,)
     ).fetchone()
     if rule is None:
         return 0
-    if rule["hourly_rate"] <= 0:
-        return 0
+    if not 0 <= rule["hourly_rate"] <= MAX_FINANCIAL_AMOUNT:
+        raise ValueError("سعر قاعدة الحجز الأسبوعي خارج الحد المسموح؛ صحّح السعر من الإعدادات.")
+    recurring_total = rule["hourly_rate"] * rule["duration_hours"]
+    if recurring_total > MAX_SQLITE_INTEGER:
+        raise ValueError("إجمالي الحجز الأسبوعي يتجاوز الحد الذي يمكن تخزينه بأمان.")
     settings = get_app_settings()
-    cycle_start_minutes, _ = work_window(settings)
+    cycle_start_minutes, window_minutes = work_window(settings)
     start_offset = cycle_offset(rule["start_time"], cycle_start_minutes)
+    if start_offset >= window_minutes or rule["duration_hours"] > (window_minutes - start_offset) // 60:
+        return 0
     end_time = format_clock(clock_minutes(rule["start_time"]) + rule["duration_hours"] * 60)
-    first_day = stadium_business_date(settings=settings)
-    days_until = (rule["weekday"] - first_day.weekday()) % 7
+    first_occurrence = next_recurring_occurrence_date(rule["weekday"], rule["start_time"], settings)
     created = 0
     for week in range(weeks):
-        booking_date = first_day + timedelta(days=days_until + week * 7)
+        booking_date = first_occurrence + timedelta(days=week * 7)
         existing_rule_booking = db.execute(
             "SELECT id FROM bookings WHERE weekly_rule_id = ? AND booking_date = ?",
             (rule_id, booking_date.isoformat()),
@@ -1448,11 +1817,48 @@ def materialize_recurring_rule(db, rule_id, weeks=52):
             (
                 rule["client_id"], booking_date.isoformat(), rule["start_time"], end_time,
                 rule["hourly_rate"], rule["duration_hours"],
-                rule["hourly_rate"] * rule["duration_hours"], rule["notes"], rule_id,
+                recurring_total, rule["notes"], rule_id,
             ),
         )
         created += 1
     return created
+
+
+def get_recurring_booking_rules(client_filter="", rule_status=""):
+    weekday_names = ["الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد"]
+    db = get_db()
+    status_value = {"active": 1, "stopped": 0}.get(rule_status)
+    filter_pattern = "%" + client_filter + "%"
+    rows = db.execute(
+        """
+        SELECT r.*, c.name AS client_name,
+               (SELECT COUNT(*) FROM bookings AS b
+                WHERE b.weekly_rule_id = r.id AND b.status = 'active') AS generated_count,
+               (SELECT COUNT(*) FROM booking_payments AS p
+                JOIN bookings AS b ON b.id = p.booking_id
+                WHERE b.weekly_rule_id = r.id) AS payment_history_count,
+               (SELECT COUNT(*) FROM recurring_deposit_transactions AS t
+                WHERE t.rule_id = r.id OR t.booking_id IN
+                    (SELECT b.id FROM bookings AS b WHERE b.weekly_rule_id = r.id)) AS deposit_history_count
+        FROM recurring_booking_rules AS r
+        JOIN clients AS c ON c.id = r.client_id
+        WHERE (? = '' OR c.name LIKE ?)
+          AND (? IS NULL OR r.active = ?)
+        ORDER BY r.active DESC, r.weekday, r.start_time, r.id DESC
+        """,
+        (client_filter, filter_pattern, status_value, status_value),
+    ).fetchall()
+    rules = []
+    settings = get_app_settings()
+    for row in rows:
+        rule = dict(row)
+        rule["weekday_name"] = weekday_names[rule["weekday"]]
+        rule["can_hard_delete"] = not rule["payment_history_count"] and not rule["deposit_history_count"]
+        rule["conflict_message"] = recurring_rule_conflict_message(
+            db, rule, exclude_rule_id=rule["id"], settings=settings
+        )
+        rules.append(rule)
+    return rules
 
 
 @app.route("/admin/recurring-bookings/new", methods=["GET", "POST"])
@@ -1460,16 +1866,19 @@ def materialize_recurring_rule(db, rule_id, weeks=52):
 @login_required
 def recurring_booking_new(rule_id=None):
     settings = get_app_settings()
+    client_filter = request.args.get("client_filter", "").strip()[:100]
+    rule_status = request.args.get("rule_status", "")
+    if rule_status not in ("", "active", "stopped"):
+        rule_status = ""
     existing_rule = None
     if rule_id is not None:
         existing_rule = get_db().execute(
-            "SELECT id, client_id, weekday, start_time, duration_hours, deposit, notes "
-            "FROM recurring_booking_rules WHERE id = ?",
+            "SELECT * FROM recurring_booking_rules WHERE id = ?",
             (rule_id,),
         ).fetchone()
         if existing_rule is None:
             flash("الحجز المتكرر غير موجود.", "error")
-            return redirect(url_for("booking_screen"))
+            return redirect(url_for("recurring_booking_new"))
     defaults = {
         "client_id": request.form.get("client_id", str(existing_rule["client_id"] if existing_rule else "")),
         "weekday": request.form.get("weekday", str(existing_rule["weekday"] if existing_rule else stadium_business_date(settings=settings).weekday())),
@@ -1479,8 +1888,30 @@ def recurring_booking_new(rule_id=None):
         "deposit": request.form.get("deposit", str(existing_rule["deposit"] if existing_rule else "0")),
         "notes": request.form.get("notes", existing_rule["notes"] if existing_rule else ""),
     }
+    cycle_start_minutes, window_minutes = work_window(settings)
+    start_time_options = [
+        format_clock(cycle_start_minutes + hour * 60)
+        for hour in range(window_minutes // 60)
+    ]
+    if defaults["start_time"] not in start_time_options:
+        start_time_options.insert(0, defaults["start_time"])
+
+    def render_form(error=None, status=200):
+        return render_template(
+            "recurring_booking_form.html",
+            clients=get_booking_clients(),
+            form=defaults,
+            start_time_options=start_time_options,
+            rule_id=rule_id,
+            rule_active=bool(existing_rule["active"]) if existing_rule else True,
+            rules=get_recurring_booking_rules(client_filter, rule_status),
+            client_filter=client_filter,
+            rule_status=rule_status,
+            error=error,
+        ), status
+
     if request.method == "GET":
-        return render_template("recurring_booking_form.html", clients=get_booking_clients(), form=defaults, rule_id=rule_id, error=None)
+        return render_form()
 
     try:
         client_id = int(defaults["client_id"])
@@ -1489,27 +1920,43 @@ def recurring_booking_new(rule_id=None):
         duration_hours = int(defaults["duration_hours"])
         hourly_rate = int(defaults["hourly_rate"])
         deposit = int(defaults["deposit"])
-    except (TypeError, ValueError):
-        return render_template("recurring_booking_form.html", clients=get_booking_clients(), form=defaults, rule_id=rule_id, error="أكمل بيانات الحجز المتكرر بشكل صحيح."), 400
+    except (TypeError, ValueError, OverflowError):
+        return render_form("أكمل بيانات الحجز المتكرر بشكل صحيح.", 400)
 
     try:
         if client_id < 1 or weekday not in range(7):
             raise ValueError("اختر العميل واليوم بشكل صحيح.")
         if start.minute != 0 or hourly_rate < 0 or deposit < 0 or duration_hours < 1:
             raise ValueError("وقت البداية والسعر والعربون والمدة يجب أن تكون صحيحة.")
+        if hourly_rate > MAX_FINANCIAL_AMOUNT:
+            raise ValueError(f"سعر الساعة يتجاوز الحد الأقصى المسموح ({MAX_FINANCIAL_AMOUNT:,}).")
+        if deposit > MAX_FINANCIAL_AMOUNT:
+            raise ValueError(f"العربون يتجاوز الحد الأقصى المسموح ({MAX_FINANCIAL_AMOUNT:,}).")
         cycle_start_minutes, window_minutes = work_window(settings)
         start_offset = cycle_offset(start.strftime("%H:%M"), cycle_start_minutes)
         if start_offset >= window_minutes or duration_hours > (window_minutes - start_offset) // 60:
             raise ValueError("مدة الحجز تتجاوز دورة عمل الملعب.")
+        if hourly_rate * duration_hours > MAX_SQLITE_INTEGER:
+            raise ValueError("إجمالي الحجز الأسبوعي يتجاوز الحد الذي يمكن تخزينه بأمان.")
     except ValueError as error:
-        return render_template("recurring_booking_form.html", clients=get_booking_clients(), form=defaults, rule_id=rule_id, error=str(error)), 400
+        return render_form(str(error), 400)
 
     db = get_db()
+    is_new_rule = rule_id is None
+    rule_values = {
+        "client_id": client_id,
+        "weekday": weekday,
+        "start_time": start.strftime("%H:%M"),
+        "duration_hours": duration_hours,
+    }
     db.execute("BEGIN IMMEDIATE")
     try:
         if db.execute("SELECT id FROM clients WHERE id = ?", (client_id,)).fetchone() is None:
             raise ValueError("العميل المحدد غير موجود.")
-        if rule_id is None:
+        if is_new_rule:
+            conflict = recurring_rule_conflict_message(db, rule_values, settings=settings)
+            if conflict:
+                raise BookingConflict(conflict)
             db.execute(
                 """
                 INSERT INTO recurring_booking_rules
@@ -1525,38 +1972,218 @@ def recurring_booking_new(rule_id=None):
                     (rule_id, deposit, "عربون الحجز الأسبوعي"),
                 )
         else:
+            current_rule = db.execute(
+                "SELECT * FROM recurring_booking_rules WHERE id = ?", (rule_id,)
+            ).fetchone()
+            if current_rule is None:
+                raise ValueError("الحجز الأسبوعي غير موجود.")
+            rule_is_active = bool(current_rule["active"])
+            pattern_changed = any((
+                current_rule["client_id"] != client_id,
+                current_rule["weekday"] != weekday,
+                current_rule["start_time"] != start.strftime("%H:%M"),
+                current_rule["duration_hours"] != duration_hours,
+            ))
+            today_iso = stadium_business_date(settings=settings).isoformat()
+            if pattern_changed:
+                db.execute(
+                    "UPDATE bookings SET weekly_rule_id = NULL, booking_type = 'single' "
+                    "WHERE weekly_rule_id = ? AND status = 'active' AND booking_date = ?",
+                    (rule_id, today_iso),
+                )
+                db.execute(
+                    """
+                    UPDATE bookings SET weekly_rule_id = NULL, booking_type = 'single'
+                    WHERE weekly_rule_id = ? AND status = 'active' AND booking_date > ?
+                      AND (
+                        booking_type = 'single'
+                        OR
+                        EXISTS (SELECT 1 FROM booking_payments AS p WHERE p.booking_id = bookings.id)
+                        OR EXISTS (SELECT 1 FROM recurring_deposit_transactions AS t WHERE t.booking_id = bookings.id)
+                      )
+                    """,
+                    (rule_id, today_iso),
+                )
+                db.execute(
+                    """
+                    UPDATE bookings SET weekly_rule_id = NULL, booking_type = 'single'
+                    WHERE weekly_rule_id = ? AND status = 'cancelled' AND booking_date > ?
+                    """,
+                    (rule_id, today_iso),
+                )
+                db.execute(
+                    "DELETE FROM bookings WHERE weekly_rule_id = ? AND status = 'active' AND booking_date > ?",
+                    (rule_id, today_iso),
+                )
+
+            if rule_is_active:
+                conflict = recurring_rule_conflict_message(
+                    db, rule_values, exclude_rule_id=rule_id, settings=settings
+                )
+                if conflict:
+                    raise BookingConflict(conflict)
+
+            if not pattern_changed and hourly_rate != current_rule["hourly_rate"]:
+                underpaid = db.execute(
+                    """
+                    SELECT b.id
+                    FROM bookings AS b
+                    LEFT JOIN (
+                        SELECT booking_id, SUM(amount) AS paid
+                        FROM booking_payments GROUP BY booking_id
+                    ) AS p ON p.booking_id = b.id
+                    WHERE b.weekly_rule_id = ? AND b.booking_type = 'recurring'
+                      AND b.status = 'active' AND b.booking_date >= ?
+                      AND (? * b.duration_hours) < COALESCE(p.paid, 0)
+                    LIMIT 1
+                    """,
+                    (rule_id, today_iso, hourly_rate),
+                ).fetchone()
+                if underpaid:
+                    raise ValueError("لا يمكن خفض سعر السلسلة إلى أقل من المبالغ المدفوعة على مواعيدها القادمة.")
+
             db.execute(
                 """
                 UPDATE recurring_booking_rules
-                SET client_id = ?, weekday = ?, start_time = ?, duration_hours = ?, hourly_rate = ?, notes = ?
+                SET client_id = ?, weekday = ?, start_time = ?, duration_hours = ?, hourly_rate = ?, deposit = ?, notes = ?
                 WHERE id = ?
                 """,
-                (client_id, weekday, start.strftime("%H:%M"), duration_hours, hourly_rate, defaults["notes"].strip(), rule_id),
+                (client_id, weekday, start.strftime("%H:%M"), duration_hours, hourly_rate, deposit, defaults["notes"].strip(), rule_id),
             )
-            today_iso = stadium_business_date(settings=settings).isoformat()
-            db.execute(
-                "DELETE FROM bookings WHERE weekly_rule_id = ? AND status = 'active' AND booking_date > ?",
-                (rule_id, today_iso),
-            )
-        materialize_recurring_rule(db, rule_id)
+            if not pattern_changed:
+                db.execute(
+                    "UPDATE bookings SET notes = ? WHERE weekly_rule_id = ? AND booking_type = 'recurring' "
+                    "AND status = 'active' AND booking_date >= ?",
+                    (defaults["notes"].strip(), rule_id, today_iso),
+                )
+                if hourly_rate != current_rule["hourly_rate"]:
+                    db.execute(
+                        "UPDATE bookings SET hourly_rate = ?, total = ? * duration_hours "
+                        "WHERE weekly_rule_id = ? AND booking_type = 'recurring' "
+                        "AND status = 'active' AND booking_date >= ?",
+                        (hourly_rate, hourly_rate, rule_id, today_iso),
+                    )
+        if is_new_rule or rule_is_active:
+            materialize_recurring_rule(db, rule_id)
         db.commit()
     except Exception as error:
         db.rollback()
         if isinstance(error, (ValueError, BookingConflict)):
-            return render_template("recurring_booking_form.html", clients=get_booking_clients(), form=defaults, error=str(error)), 409
+            return render_form(str(error), 409)
         raise
-    flash("تم حفظ الحجز الأسبوعي الدائم.", "success")
+    if is_new_rule:
+        flash("تم إنشاء الحجز الأسبوعي بنجاح.", "success")
+    elif existing_rule and existing_rule["active"]:
+        flash("تم تحديث الحجز الأسبوعي ومواعيده المستقبلية.", "success")
+    else:
+        flash("تم تحديث بيانات الحجز الأسبوعي؛ وما زال متوقفًا.", "success")
     return redirect(url_for("booking_screen"))
+
+
+def redirect_to_recurring_booking_list():
+    client_filter = request.values.get("client_filter", "").strip()[:100]
+    rule_status = request.values.get("rule_status", "")
+    if rule_status not in ("", "active", "stopped"):
+        rule_status = ""
+    query = {}
+    if client_filter:
+        query["client_filter"] = client_filter
+    if rule_status:
+        query["rule_status"] = rule_status
+    return redirect(url_for("recurring_booking_new", **query))
 
 
 @app.route("/admin/recurring-bookings/<int:rule_id>/stop", methods=["POST"])
 @login_required
 def recurring_booking_stop(rule_id):
     db = get_db()
+    rule = db.execute("SELECT id FROM recurring_booking_rules WHERE id = ?", (rule_id,)).fetchone()
+    if rule is None:
+        flash("الحجز الأسبوعي غير موجود.", "error")
+        return redirect_to_recurring_booking_list()
+    db.execute("BEGIN IMMEDIATE")
     db.execute("UPDATE recurring_booking_rules SET active = 0 WHERE id = ?", (rule_id,))
     db.commit()
     flash("تم إيقاف الحجز الأسبوعي؛ المواعيد المنشأة سابقًا محفوظة.", "success")
-    return redirect(url_for("booking_screen"))
+    return redirect_to_recurring_booking_list()
+
+
+@app.route("/admin/recurring-bookings/<int:rule_id>/delete", methods=["POST"])
+@login_required
+def recurring_booking_delete(rule_id):
+    db = get_db()
+    db.execute("BEGIN IMMEDIATE")
+    rule = db.execute("SELECT id FROM recurring_booking_rules WHERE id = ?", (rule_id,)).fetchone()
+    if rule is None:
+        db.rollback()
+        flash("الحجز الأسبوعي غير موجود أو سبق حذفه.", "error")
+        return redirect_to_recurring_booking_list()
+
+    has_booking_payments = db.execute(
+        """
+        SELECT 1 FROM booking_payments AS p
+        JOIN bookings AS b ON b.id = p.booking_id
+        WHERE b.weekly_rule_id = ? LIMIT 1
+        """,
+        (rule_id,),
+    ).fetchone()
+    has_deposit_history = db.execute(
+        """
+        SELECT 1 FROM recurring_deposit_transactions
+        WHERE rule_id = ? OR booking_id IN
+            (SELECT id FROM bookings WHERE weekly_rule_id = ?)
+        LIMIT 1
+        """,
+        (rule_id, rule_id),
+    ).fetchone()
+    if has_booking_payments or has_deposit_history:
+        db.rollback()
+        flash(
+            "تعذر الحذف النهائي لأن السلسلة مرتبطة بدفعات أو حركات عربون محفوظة. أوقف السلسلة بدلًا من حذف سجلها المالي.",
+            "error",
+        )
+        return redirect_to_recurring_booking_list()
+
+    deleted_count = db.execute(
+        "SELECT COUNT(*) FROM bookings WHERE weekly_rule_id = ?", (rule_id,)
+    ).fetchone()[0]
+    try:
+        db.execute("DELETE FROM bookings WHERE weekly_rule_id = ?", (rule_id,))
+        db.execute("DELETE FROM recurring_booking_rules WHERE id = ?", (rule_id,))
+        db.commit()
+    except sqlite3.IntegrityError:
+        db.rollback()
+        flash("تعذر الحذف لأن هناك سجلًا مرتبطًا بهذه السلسلة؛ لم تُحذف أي بيانات.", "error")
+        return redirect_to_recurring_booking_list()
+    flash(f"تم حذف الحجز الأسبوعي نهائيًا وحذف {deleted_count} موعدًا مرتبطًا به.", "success")
+    return redirect_to_recurring_booking_list()
+
+
+@app.route("/admin/recurring-bookings/<int:rule_id>/resume", methods=["POST"])
+@login_required
+def recurring_booking_resume(rule_id):
+    db = get_db()
+    db.execute("BEGIN IMMEDIATE")
+    try:
+        rule = db.execute("SELECT * FROM recurring_booking_rules WHERE id = ?", (rule_id,)).fetchone()
+        if rule is None:
+            raise ValueError("الحجز الأسبوعي غير موجود.")
+        conflict = recurring_rule_conflict_message(
+            db, rule, exclude_rule_id=rule_id, settings=get_app_settings()
+        )
+        if conflict:
+            raise BookingConflict(conflict)
+        db.execute("UPDATE recurring_booking_rules SET active = 1 WHERE id = ?", (rule_id,))
+        materialize_recurring_rule(db, rule_id)
+        db.commit()
+    except Exception as error:
+        db.rollback()
+        if isinstance(error, (ValueError, BookingConflict)):
+            flash(str(error), "error")
+            return redirect_to_recurring_booking_list()
+        raise
+    flash("تم استئناف الحجز الأسبوعي.", "success")
+    return redirect_to_recurring_booking_list()
 
 
 @app.route("/admin/bookings/<int:booking_id>/edit", methods=["GET", "POST"])
@@ -1629,7 +2256,9 @@ def booking_payments(booking_id):
         amount = int(request.form.get("amount", ""))
         if amount <= 0:
             raise PaymentError("يجب أن تكون قيمة الدفعة أكبر من صفر.")
-    except ValueError as error:
+        if amount > MAX_FINANCIAL_AMOUNT:
+            raise PaymentError(f"قيمة الدفعة تتجاوز الحد الأقصى المسموح ({MAX_FINANCIAL_AMOUNT:,}).")
+    except (ValueError, OverflowError) as error:
         message = str(error) if isinstance(error, PaymentError) else "أدخل مبلغًا صحيحًا للدفعة."
         page = get_payment_page(booking_id, error=message, amount=request.form.get("amount", ""), status=400)
         if page is None:
@@ -1723,6 +2352,16 @@ EXPENSE_CATEGORIES = ["كهرباء", "مياه", "صيانة", "رواتب", "�
 INCOME_CATEGORIES = ["تأجير معدات", "بيع مشروبات", "تأجير الملعب لأغراض أخرى", "رسوم أخرى", "أخرى"]
 
 
+def parse_iso_date(value, label):
+    try:
+        parsed = date.fromisoformat(value)
+    except (TypeError, ValueError, OverflowError):
+        raise ValueError(f"{label} غير صالح؛ استخدم صيغة YYYY-MM-DD.") from None
+    if parsed.isoformat() != value:
+        raise ValueError(f"{label} غير صالح؛ استخدم صيغة YYYY-MM-DD.")
+    return parsed
+
+
 def financial_values(form, field_name):
     values = {
         "amount": form.get("amount", ""),
@@ -1733,14 +2372,19 @@ def financial_values(form, field_name):
         field_name: form.get(field_name, stadium_business_date().isoformat()),
         "notes": form.get("notes", "").strip(),
     }
-    amount = int(values["amount"])
+    try:
+        amount = int(values["amount"])
+    except (TypeError, ValueError, OverflowError):
+        raise ValueError("أدخل مبلغًا صحيحًا واختر طريقة دفع صحيحة.") from None
     if amount <= 0 or values["payment_method"] not in {"cash", "transfer"}:
         raise ValueError("أدخل مبلغًا صحيحًا واختر طريقة دفع صحيحة.")
+    if amount > MAX_FINANCIAL_AMOUNT:
+        raise ValueError(f"المبلغ يتجاوز الحد الأقصى المسموح ({MAX_FINANCIAL_AMOUNT:,}).")
     if values["category"] == "أخرى":
         values["category"] = values["custom_category"]
     if not values["category"]:
         raise ValueError("اختر نوع العملية أو أدخل اسم النوع الآخر.")
-    datetime.strptime(values[field_name], "%Y-%m-%d")
+    values[field_name] = parse_iso_date(values[field_name], "تاريخ العملية").isoformat()
     values["amount"] = amount
     return values
 
@@ -1753,38 +2397,50 @@ def financial_list(kind):
     query = request.args.get("q", "").strip()
     start = request.args.get("start_date", "").strip()
     end = request.args.get("end_date", "").strip()
-    like_query = f"%{query}%"
-    params = (query, like_query, like_query, like_query, start, start, end, end)
-    if is_expense:
-        entries = get_db().execute(
-            """
-            SELECT * FROM expenses
-            WHERE (? = '' OR category LIKE ? OR description LIKE ? OR notes LIKE ?)
-              AND (? = '' OR expense_date >= ?)
-              AND (? = '' OR expense_date <= ?)
-            ORDER BY expense_date DESC, id DESC
-            """,
-            params,
-        ).fetchall()
+    error = None
+    try:
+        start_day = parse_iso_date(start, "تاريخ البداية") if start else None
+        end_day = parse_iso_date(end, "تاريخ النهاية") if end else None
+        if start_day and end_day and start_day > end_day:
+            raise ValueError("تاريخ البداية يجب ألا يأتي بعد تاريخ النهاية.")
+    except ValueError as exc:
+        error = str(exc)
+
+    if error:
+        entries = []
     else:
-        entries = get_db().execute(
-            """
-            SELECT * FROM other_income
-            WHERE (? = '' OR category LIKE ? OR description LIKE ? OR notes LIKE ?)
-              AND (? = '' OR income_date >= ?)
-              AND (? = '' OR income_date <= ?)
-            ORDER BY income_date DESC, id DESC
-            """,
-            params,
-        ).fetchall()
+        like_query = f"%{query}%"
+        params = (query, like_query, like_query, like_query, start, start, end, end)
+        if is_expense:
+            entries = get_db().execute(
+                """
+                SELECT * FROM expenses
+                WHERE (? = '' OR category LIKE ? OR description LIKE ? OR notes LIKE ?)
+                  AND (? = '' OR expense_date >= ?)
+                  AND (? = '' OR expense_date <= ?)
+                ORDER BY expense_date DESC, id DESC
+                """,
+                params,
+            ).fetchall()
+        else:
+            entries = get_db().execute(
+                """
+                SELECT * FROM other_income
+                WHERE (? = '' OR category LIKE ? OR description LIKE ? OR notes LIKE ?)
+                  AND (? = '' OR income_date >= ?)
+                  AND (? = '' OR income_date <= ?)
+                ORDER BY income_date DESC, id DESC
+                """,
+                params,
+            ).fetchall()
     return render_template(
         "financial_list.html", entries=entries, kind=kind,
         page_title="المصروفات" if is_expense else "واردات أخرى",
         new_endpoint="expense_new" if is_expense else "income_new",
         edit_endpoint="expense_edit" if is_expense else "income_edit",
         delete_endpoint="expense_delete" if is_expense else "income_delete",
-        date_field=date_field, query=query, start_date=start, end_date=end,
-    )
+        date_field=date_field, query=query, start_date=start, end_date=end, error=error,
+    ), 400 if error else 200
 
 
 @app.route("/admin/expenses", methods=["GET"])
@@ -1848,8 +2504,8 @@ def financial_form(kind, record_id=None):
             get_db().commit()
             flash("تم حفظ السجل بنجاح.", "success")
             return redirect(url_for("expenses_list" if is_expense else "income_list"))
-        except (TypeError, ValueError):
-            error = "تحقق من البيانات وأدخل تاريخًا ومبلغًا صحيحين."
+        except (TypeError, ValueError) as exc:
+            error = str(exc) or "تحقق من البيانات وأدخل تاريخًا ومبلغًا صحيحين."
         else:
             error = None
     else:

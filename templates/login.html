@@ -3,16 +3,17 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>تسجيل الدخول | إدارة الملعب</title>
+  <title>تسجيل الدخول | Happy Family Resort</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   <link rel="stylesheet" href="{{ url_for('theme_css') }}">
   <script src="{{ url_for('static', filename='js/theme.js') }}" defer></script>
+  {% include '_pwa_head.html' %}
 </head>
 <body>
   <main class="auth-shell">
     <section class="auth-card" aria-labelledby="page-title">
-      <div class="brand-mark" aria-hidden="true">م</div>
-      <p class="eyebrow">نظام إدارة الملعب</p>
+      <img class="brand-mark brand-logo" src="{{ url_for('static', filename='icons/icon-192.png') }}" alt="شعار Happy Family Resort">
+      <p class="eyebrow">Happy Family Resort</p>
       <h1 id="page-title">تسجيل الدخول</h1>
       <p class="muted">أدخل بيانات المسؤول للمتابعة.</p>
 

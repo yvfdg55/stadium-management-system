@@ -1,12 +1,14 @@
 (() => {
   const storageKey = 'stadium-theme';
   const root = document.documentElement;
+  const themeColorMeta = document.querySelector('meta[name="theme-color"]');
   const savedTheme = window.localStorage.getItem(storageKey);
   const preferredTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 
   const applyTheme = (theme) => {
     const isDark = theme === 'dark';
     root.dataset.theme = isDark ? 'dark' : 'light';
+    if (themeColorMeta) themeColorMeta.content = isDark ? '#0b1728' : '#f5dc00';
     document.querySelectorAll('[data-theme-toggle]').forEach((button) => {
       button.textContent = button.classList.contains('header-theme-toggle')
         ? (isDark ? '☀️' : '🌙')

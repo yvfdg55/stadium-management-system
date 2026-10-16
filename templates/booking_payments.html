@@ -3,10 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>تفاصيل الحجز | إدارة الملعب</title>
+  <title>تفاصيل الحجز | Happy Family Resort</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   <link rel="stylesheet" href="{{ url_for('theme_css') }}">
   <script src="{{ url_for('static', filename='js/theme.js') }}" defer></script>
+  {% include '_pwa_head.html' %}
 </head>
 <body>
   {% include "_admin_nav.html" %}
@@ -15,7 +16,7 @@
       <div>
         <p class="eyebrow">نظام إدارة الملعب</p>
         <h1>تفاصيل الحجز</h1>
-        <p class="muted compact">{{ booking['client_name'] }} — {{ booking['booking_date'] }}، {{ booking['start_time'] }} - {{ booking['end_time'] }}</p>
+        <p class="muted compact">{{ booking['client_name'] }} — {{ booking['booking_date'] }}، {{ booking['start_time']|arabic_time }} - {{ booking['end_time']|arabic_time }}</p>
       </div>
       <a class="button-link secondary" href="{{ url_for('booking_screen', date=booking['booking_date']) }}">العودة لساعات الحجز</a>
     </header>
@@ -75,7 +76,7 @@
       <div class="payment-history">
         {% for payment in payments %}
           <article class="payment-history-row">
-            <span>{{ payment['paid_at'] }}</span>
+            <span>{{ payment['paid_at_local'] }}</span>
             <strong>{{ '{:,}'.format(payment['amount']) }}</strong>
           </article>
         {% else %}

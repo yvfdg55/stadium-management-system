@@ -1,0 +1,14 @@
+{% macro time_label(value) -%}
+  {% set label = value|arabic_time %}
+  {% set parts = label.split(' ') %}
+  {% if parts|length == 2 %}
+    {% set full_period = 'صباحًا' if parts[1] == 'ص' else 'مساءً' %}
+    <span class="time-label" dir="ltr"><bdi class="time-clock">{{ parts[0] }}</bdi><abbr class="time-period" title="{{ full_period }}" aria-label="{{ full_period }}">{{ parts[1] }}</abbr></span>
+  {% else %}
+    <span class="time-label" dir="ltr">{{ label }}</span>
+  {% endif %}
+{%- endmacro %}
+
+{% macro time_range(start_value, end_value) -%}
+  <span class="time-range" dir="ltr">{{ time_label(start_value) }}<span class="time-range-separator" aria-hidden="true">–</span>{{ time_label(end_value) }}</span>
+{%- endmacro %}

@@ -7,11 +7,12 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   <link rel="stylesheet" href="{{ url_for('theme_css') }}">
   <script src="{{ url_for('static', filename='js/theme.js') }}" defer></script>
+  {% include '_pwa_head.html' %}
 </head>
 <body>
   <div class="dashboard-layout">
     <aside class="dashboard-sidebar" aria-label="التنقل الرئيسي">
-      <div class="sidebar-brand"><span class="brand-mark" aria-hidden="true">م</span><div><strong>{{ venue_name }}</strong><small>نظام الإدارة</small></div></div>
+      <div class="sidebar-brand"><img class="brand-mark brand-logo" src="{{ url_for('static', filename='icons/icon-192.png') }}" alt=""><div><strong>{{ venue_name }}</strong><small>Happy Family Resort · نظام الإدارة</small></div></div>
       <nav class="sidebar-nav">
         <a class="sidebar-link active" href="{{ url_for('admin_home') }}"><span class="sidebar-icon" aria-hidden="true">⌂</span>الرئيسية</a>
         <p class="sidebar-label">الحجوزات</p>
@@ -62,7 +63,7 @@
           <div class="premium-section-title"><h2>الحجوزات القادمة</h2><a href="{{ url_for('booking_screen') }}">عرض الكل</a></div>
           <div class="upcoming-list">
             {% for booking in upcoming_bookings %}
-              <div class="upcoming-item"><div><strong>{{ booking['start_time'] }} · {{ booking['duration_hours'] }} س</strong><span>{{ booking['client_name'] }}</span></div><b class="payment-mini {{ 'paid' if booking['remaining'] == 0 else 'due' }}">{{ 'مدفوع' if booking['remaining'] == 0 else 'متبقي' }}</b></div>
+              <div class="upcoming-item"><div><strong>{{ booking['start_time']|arabic_time }} · {{ booking['duration_hours'] }} س</strong><span>{{ booking['client_name'] }}</span></div><b class="payment-mini {{ 'paid' if booking['remaining'] == 0 else 'due' }}">{{ 'مدفوع' if booking['remaining'] == 0 else 'متبقي' }}</b></div>
             {% else %}<p class="muted compact">لا توجد حجوزات قادمة.</p>{% endfor %}
           </div>
         </article>

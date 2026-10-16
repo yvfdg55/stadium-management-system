@@ -1,12 +1,14 @@
+{% from "_time_display.html" import time_range -%}
 <!doctype html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ساعات الحجز | إدارة الملعب</title>
+  <title>ساعات الحجز | Happy Family Resort</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   <link rel="stylesheet" href="{{ url_for('theme_css') }}">
   <script src="{{ url_for('static', filename='js/theme.js') }}" defer></script>
+  {% include '_pwa_head.html' %}
 </head>
 <body>
   {% include "_admin_nav.html" %}
@@ -21,7 +23,7 @@
     </header>
 
     <section class="schedule-meta" aria-label="دورة ساعات الحجز">
-      دورة يوم الملعب: <strong>{{ work_start }} - {{ work_end_label }}</strong>
+      دورة يوم الملعب: <strong>{{ work_start|arabic_time }} - {{ work_end_label|arabic_time }}</strong>
       ({{ work_window_hours }} ساعة، تنتهي {{ work_end_day }}).
     </section>
 
@@ -37,8 +39,8 @@
           {% if slot['booking'] %}
             <a class="hour-card status-{{ slot['booking']['card_state'] }}"
                href="{{ url_for('booking_payments', booking_id=slot['booking']['id']) }}"
-               aria-label="{{ slot['start'] }} إلى {{ slot['end'] }}، {{ slot['booking']['status_label'] }}، {{ slot['booking']['client_name'] }}{% if slot['booking']['short_phone'] %}، {{ slot['booking']['short_phone'] }}{% endif %}">
-              <span class="hour-time">{{ slot['start'] }} - {{ slot['end'] }}</span>
+               aria-label="{{ slot['start']|arabic_time }} إلى {{ slot['end']|arabic_time }}، {{ slot['booking']['status_label'] }}، {{ slot['booking']['client_name'] }}{% if slot['booking']['short_phone'] %}، {{ slot['booking']['short_phone'] }}{% endif %}">
+              <span class="hour-time">{{ time_range(slot['start'], slot['end']) }}</span>
               <span class="hour-status">{{ slot['booking']['status_label'] }}</span>
               <span class="hour-client">{{ slot['booking']['client_name'] }}</span>
               {% if slot['booking']['short_phone'] %}
@@ -48,8 +50,8 @@
           {% else %}
             <a class="hour-card status-available"
                href="{{ url_for('booking_new', date=selected_date, start_time=slot['start']) }}"
-               aria-label="{{ slot['start'] }} إلى {{ slot['end'] }}، متاح، اضغط لإنشاء حجز">
-              <span class="hour-time">{{ slot['start'] }} - {{ slot['end'] }}</span>
+               aria-label="{{ slot['start']|arabic_time }} إلى {{ slot['end']|arabic_time }}، متاح، اضغط لإنشاء حجز">
+              <span class="hour-time">{{ time_range(slot['start'], slot['end']) }}</span>
               <span class="hour-status">متاح</span>
             </a>
           {% endif %}

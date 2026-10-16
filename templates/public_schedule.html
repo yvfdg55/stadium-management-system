@@ -1,3 +1,4 @@
+{% from "_time_display.html" import time_range -%}
 <!doctype html>
 <html lang="ar" dir="rtl">
 <head>
@@ -7,10 +8,12 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   <link rel="stylesheet" href="{{ url_for('theme_css') }}">
   <script src="{{ url_for('static', filename='js/theme.js') }}" defer></script>
+  {% include '_customer_pwa_head.html' %}
 </head>
 <body>
   <main class="page-shell public-schedule-page">
     <header class="public-schedule-header">
+      <img class="public-brand-logo" src="{{ url_for('static', filename='icons/icon-192.png') }}" alt="شعار Happy Family Resort">
       <p class="eyebrow">{{ venue_name }}</p>
       <h1>مواعيد الملعب</h1>
       {% if venue_phone %}
@@ -21,6 +24,27 @@
       {% endif %}
     </header>
 
+    {% if policy_state == 'unconfigured' %}
+    <section class="policy-panel" aria-labelledby="policy-title">
+      <h2 id="policy-title">سياسة الملعب</h2>
+      <p class="policy-blocked" role="status">لم يضف المسؤول سياسة الملعب بعد. لن تظهر المواعيد حتى يكتبها ويحفظها من صفحة الإعدادات.</p>
+    </section>
+    {% elif policy_state == 'consent' %}
+    <section class="policy-panel" aria-labelledby="policy-title">
+      <h2 id="policy-title">سياسة الملعب</h2>
+      <div class="policy-content">{{ policy_text }}</div>
+      {% if policy_error %}<p class="alert error" role="alert">{{ policy_error }}</p>{% endif %}
+      <form class="policy-consent-form" method="post" action="{{ url_for('public_schedule') }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="date" value="{{ selected_date }}">
+        <label class="policy-ack">
+          <input type="checkbox" name="accept_policy" value="yes" required>
+          <span>أقر أني قرأت وأوافق على سياسة الملعب</span>
+        </label>
+        <button type="submit">أوافق وأعرض المواعيد</button>
+      </form>
+    </section>
+    {% else %}
     <nav class="public-days" aria-label="الأيام القادمة">
       {% for day in days %}
         <a class="public-day {{ 'selected' if day['date'] == selected_date else '' }}" href="{{ url_for('public_schedule', date=day['date']) }}">
@@ -31,24 +55,27 @@
     </nav>
 
     <div class="public-legend" aria-label="مفتاح الحالات">
-      <span><i class="legend-dot empty"></i>فارغة</span>
+      <span><i class="legend-dot empty"></i>متاحة</span>
       <span><i class="legend-dot booked"></i>محجوزة</span>
       <span><i class="legend-dot fixed"></i>مثبتة</span>
     </div>
 
     <section aria-label="ساعات اليوم">
-      <div class="public-hours-grid">
+      <div class="booking-hours-grid public-hours-grid">
         {% for slot in slots %}
-          <div class="public-hour public-hour-{{ slot['state'] }}" aria-label="{{ slot['start'] }} إلى {{ slot['end'] }}، {{ 'فارغة' if slot['state'] == 'empty' else 'محجوزة' if slot['state'] == 'booked' else 'مثبتة' }}{% if slot['client_names'] %}، ك : {{ slot['client_names']|join('، ') }}{% endif %}">
-            <span>{{ slot['start'] }} - {{ slot['end'] }}</span>
-            <strong>{{ 'فارغة' if slot['state'] == 'empty' else 'محجوزة' if slot['state'] == 'booked' else 'مثبتة' }}</strong>
-            {% if slot['client_names'] %}<small class="public-hour-client">ك : {{ slot['client_names']|join('، ') }}</small>{% endif %}
+          {% set state_label = 'متاحة' if slot['state'] == 'empty' else 'محجوزة' if slot['state'] == 'booked' else 'مثبتة' %}
+          {% set state_class = 'available' if slot['state'] == 'empty' else 'booked' if slot['state'] == 'booked' else 'recurring' %}
+          <div class="hour-card public-hour status-{{ state_class }}" aria-label="{{ slot['start'] }} إلى {{ slot['end'] }}، {{ state_label }}{% if slot['client_names'] %}، ك : {{ slot['client_names']|join('، ') }}{% endif %}">
+            <span class="hour-time">{{ time_range(slot['start'], slot['end']) }}</span>
+            <span class="hour-status">{{ state_label }}</span>
+            {% if slot['client_names'] %}<span class="hour-client public-hour-client">ك : {{ slot['client_names']|join('، ') }}</span>{% endif %}
           </div>
         {% else %}
           <p class="empty-state">لا توجد ساعات متاحة للعرض.</p>
         {% endfor %}
       </div>
     </section>
+    {% endif %}
   </main>
   <button class="theme-toggle" data-theme-toggle type="button" aria-label="تبديل الوضع" aria-pressed="false"></button>
 </body>
